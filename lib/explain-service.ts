@@ -2,6 +2,7 @@ import { generateAnalogyExplanation } from "@/lib/ai/analogy-generator";
 import { persistExplanation } from "@/lib/explanations/persist";
 import { resolveAccessIdentity } from "@/lib/guest/session";
 import { isLanguage } from "@/lib/i18n/types";
+import { splitTopicList } from "@/lib/topics";
 import type {
   Explanation,
   ExplanationMode,
@@ -40,10 +41,7 @@ export function normalizeFamiliarTopics(
     return [];
   }
 
-  return value
-    .split(/[,;]+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+  return splitTopicList(value);
 }
 
 /** Validate and normalize an untrusted request body into generator input. */

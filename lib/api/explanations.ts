@@ -1,5 +1,9 @@
+import {
+  readApiDataOrThrow,
+  readJsonOrThrow,
+  sameOriginGet,
+} from "@/lib/api/http";
 import type {
-  ExplainApiResponse,
   Explanation,
   LearningTrailItem,
   LearningTrailPageApiResponse,
@@ -12,14 +16,6 @@ import type {
  * Frontend → /api/explanations → queries service → Supabase (guest_id filtered)
  * Never imports service-role keys or queries Supabase from the browser.
  */
-
-const fetchOptions: RequestInit = {
-  method: "GET",
-  headers: { Accept: "application/json" },
-  cache: "no-store",
-  // Ensure httpOnly analogify_guest_id cookie is sent on same-origin requests
-  credentials: "same-origin",
-};
 
 export interface LearningTrailPageResult {
   items: LearningTrailItem[];
@@ -47,15 +43,13 @@ export async function fetchLearningTrailPage(options?: {
 
   const response = await fetch(
     `/api/explanations?${params.toString()}`,
-    fetchOptions,
+    sameOriginGet,
   );
 
-  let payload: LearningTrailPageApiResponse;
-  try {
-    payload = (await response.json()) as LearningTrailPageApiResponse;
-  } catch {
-    throw new Error("Invalid response from explanations API");
-  }
+  const payload = await readJsonOrThrow<LearningTrailPageApiResponse>(
+    response,
+    "Invalid response from explanations API",
+  );
 
   if (!payload.success || !payload.data) {
     throw new Error(
@@ -89,21 +83,11 @@ export async function fetchExplanationById(
 ): Promise<Explanation> {
   const response = await fetch(
     `/api/explanations/${encodeURIComponent(id)}`,
-    fetchOptions,
+    sameOriginGet,
   );
 
-  let payload: ExplainApiResponse;
-  try {
-    payload = (await response.json()) as ExplainApiResponse;
-  } catch {
-    throw new Error("Invalid response from explanation API");
-  }
-
-  if (!payload.success || !payload.data) {
-    throw new Error(
-      payload.error ?? "We couldn’t load that explanation right now.",
-    );
-  }
-
-  return payload.data;
+  return readApiDataOrThrow<Explanation>(response, {
+    invalidMessage: "Invalid response from explanation API",
+    failureFallback: "We couldn’t load that explanation right now.",
+  });
 }

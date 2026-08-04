@@ -84,6 +84,9 @@ export function HomePage() {
   }, [t]);
 
   useEffect(() => {
+    // Client-only trail load after mount / language-driven reload of messages.
+    // setState inside the async loader is intentional, not a derived-state effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- remote list hydration
     void loadTrail();
   }, [loadTrail]);
 

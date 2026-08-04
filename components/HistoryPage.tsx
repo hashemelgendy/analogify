@@ -96,6 +96,8 @@ export function HistoryPage() {
   );
 
   useEffect(() => {
+    // Client-only paged history load when the page changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- remote list hydration
     void loadHistoryPage(currentPage);
   }, [currentPage, loadHistoryPage]);
 

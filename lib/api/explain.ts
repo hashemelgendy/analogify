@@ -1,8 +1,9 @@
-import type {
-  ExplainApiResponse,
-  Explanation,
-  ExplainRequest,
-} from "@/types/explanation";
+import {
+  readApiDataOrThrow,
+  sameOriginJsonPost,
+} from "@/lib/api/http";
+import type { Explanation, ExplainRequest } from "@/types/explanation";
+import { splitTopicList } from "@/lib/topics";
 
 /**
  * Client helpers for explain flow.
@@ -12,34 +13,14 @@ import type {
 export async function requestExplanation(
   body: ExplainRequest,
 ): Promise<Explanation> {
-  const response = await fetch("/api/explain", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify(body),
-    credentials: "same-origin",
+  const response = await fetch("/api/explain", sameOriginJsonPost(body));
+
+  return readApiDataOrThrow<Explanation>(response, {
+    invalidMessage: "Invalid response from explain API",
+    failureFallback: "Failed to create explanation",
   });
-
-  let payload: ExplainApiResponse;
-
-  try {
-    payload = (await response.json()) as ExplainApiResponse;
-  } catch {
-    throw new Error("Invalid response from explain API");
-  }
-
-  if (!payload.success || !payload.data) {
-    throw new Error(payload.error ?? "Failed to create explanation");
-  }
-
-  return payload.data;
 }
 
 export function parseFamiliarTopicsInput(value: string): string[] {
-  return value
-    .split(/[,;]+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+  return splitTopicList(value);
 }

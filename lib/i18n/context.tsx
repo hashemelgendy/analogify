@@ -6,7 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import {
@@ -34,6 +34,9 @@ type LanguageContextValue = {
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
+/** Same-tab updates for language (storage event only fires across tabs). */
+const LANGUAGE_CHANGE_EVENT = "anuminate-language-change";
+
 function readStoredLanguage(): Language {
   if (typeof window === "undefined") return "en";
   try {
@@ -52,29 +55,51 @@ function applyDocumentLanguage(language: Language) {
   document.documentElement.dir = dir;
 }
 
+function subscribeLanguage(onStoreChange: () => void) {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  const handle = () => onStoreChange();
+  window.addEventListener(LANGUAGE_CHANGE_EVENT, handle);
+  window.addEventListener("storage", handle);
+  return () => {
+    window.removeEventListener(LANGUAGE_CHANGE_EVENT, handle);
+    window.removeEventListener("storage", handle);
+  };
+}
+
+function getLanguageSnapshot(): Language {
+  return readStoredLanguage();
+}
+
+function getServerLanguageSnapshot(): Language {
+  return "en";
+}
+
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Language>("en");
-  const [ready, setReady] = useState(false);
+  const language = useSyncExternalStore(
+    subscribeLanguage,
+    getLanguageSnapshot,
+    getServerLanguageSnapshot,
+  );
 
   useEffect(() => {
-    const stored = readStoredLanguage();
-    setLanguageState(stored);
-    applyDocumentLanguage(stored);
-    setReady(true);
-  }, []);
+    applyDocumentLanguage(language);
+  }, [language]);
 
   const setLanguage = useCallback((next: Language) => {
-    setLanguageState(next);
-    applyDocumentLanguage(next);
     try {
       window.localStorage.setItem(LANGUAGE_STORAGE_KEY, next);
     } catch {
       // ignore
     }
+    applyDocumentLanguage(next);
+    window.dispatchEvent(new Event(LANGUAGE_CHANGE_EVENT));
   }, []);
 
-  const value = useMemo<LanguageContextValue>(() => {
-    return {
+  const value = useMemo<LanguageContextValue>(
+    () => ({
       language,
       setLanguage,
       dir: languageToDir(language),
@@ -82,17 +107,9 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       topicLabel: (topicId: SuggestedTopicId) =>
         translateTopic(language, topicId),
       suggestedTopicIds: SUGGESTED_TOPIC_IDS,
-    };
-  }, [language, setLanguage]);
-
-  // Avoid a flash of wrong direction once mounted; first paint is en.
-  if (!ready) {
-    return (
-      <LanguageContext.Provider value={value}>
-        {children}
-      </LanguageContext.Provider>
-    );
-  }
+    }),
+    [language, setLanguage],
+  );
 
   return (
     <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>

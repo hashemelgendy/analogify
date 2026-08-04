@@ -4,17 +4,6 @@ import type {
   FormDefaults,
 } from "@/types/explanation";
 
-export const SUGGESTED_TOPICS = [
-  "Cooking",
-  "Gaming",
-  "Fitness",
-  "Business",
-  "Movies",
-  "Sports",
-  "Programming",
-] as const;
-
-
 /** Initial form values — empty so inputs start blank. */
 export const DEFAULT_FORM_VALUES: FormDefaults = {
   concept: "",
