@@ -75,6 +75,19 @@ body {
     user-select: none;
   }
 
+  /* Generated explanation prose must remain selectable / copyable */
+  .explanation-prose,
+  .explanation-prose * {
+    -webkit-user-select: text;
+    user-select: text;
+    cursor: text;
+  }
+
+  .explanation-prose strong {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
   a[href],
   a[href] *,
   a[href]::before,

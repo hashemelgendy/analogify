@@ -5,10 +5,12 @@ import { useLanguage, type TranslationKey } from "@/lib/i18n";
 import {
   hasInDepthMarkers,
   parseInDepthSections,
-  type InDepthSectionId,
 } from "@/lib/explanation-sections";
 import { conceptTag, primaryFamiliarTag } from "@/lib/explanation-display";
-import { formatInlineMarkdown } from "@/lib/format-inline-markdown";
+import {
+  formatInlineMarkdown,
+  formatRichText,
+} from "@/lib/format-inline-markdown";
 import type { Explanation, ExplanationMode } from "@/types/explanation";
 import { Button, Card, Tag } from "./ui";
 
@@ -22,40 +24,39 @@ interface ExplanationCardProps {
   showRefinementActions?: boolean;
 }
 
-const SECTION_TITLE_KEYS: Record<InDepthSectionId, TranslationKey> = {
-  roleMapping: "inDepthRoleMapping",
-  process: "inDepthProcess",
-  optionalPaths: "inDepthOptionalPaths",
-  constraints: "inDepthConstraints",
-  summary: "inDepthSummary",
-};
-
 /** Section shell matching The Analogy / Elaboration surfaces. */
 function ContentSection({
   title,
   titleClassName,
+  titleAsHeading = false,
   children,
 }: {
   title: string;
   titleClassName: string;
+  /** Dynamic markdown titles use sentence case; fixed labels use eyebrow styling. */
+  titleAsHeading?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className="cursor-default rounded-2xl bg-analogy-bg px-5 py-4">
-      <p
-        className={`mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] ${titleClassName}`}
-      >
-        {title}
-      </p>
-      <div className="text-[15px] leading-relaxed text-foreground/90 whitespace-pre-wrap">
-        {children}
-      </div>
+    <div className="explanation-prose cursor-text rounded-2xl bg-analogy-bg px-5 py-4">
+      {title ? (
+        <p
+          className={
+            titleAsHeading
+              ? `mb-3 text-[15px] font-bold tracking-tight ${titleClassName}`
+              : `mb-2 cursor-default text-[11px] font-semibold uppercase tracking-[0.14em] ${titleClassName}`
+          }
+        >
+          {title}
+        </p>
+      ) : null}
+      <div className="min-w-0 select-text">{children}</div>
     </div>
   );
 }
 
 function FormattedBody({ text }: { text: string }) {
-  return <>{formatInlineMarkdown(text)}</>;
+  return formatRichText(text);
 }
 
 function InDepthBody({ content }: { content: string }) {
@@ -64,7 +65,10 @@ function InDepthBody({ content }: { content: string }) {
 
   if (sections.length === 0) {
     return (
-      <ContentSection title={t("elaboration")} titleClassName="text-tag-target-text">
+      <ContentSection
+        title={t("elaboration")}
+        titleClassName="text-tag-target-text"
+      >
         <FormattedBody text={content} />
       </ContentSection>
     );
@@ -72,17 +76,26 @@ function InDepthBody({ content }: { content: string }) {
 
   return (
     <>
-      {sections.map((section, index) => (
-        <ContentSection
-          key={section.id}
-          title={t(SECTION_TITLE_KEYS[section.id])}
-          titleClassName={
-            index % 2 === 0 ? "text-primary" : "text-tag-target-text"
-          }
-        >
-          <FormattedBody text={section.body} />
-        </ContentSection>
-      ))}
+      {sections.map((section, index) => {
+        const title =
+          section.titleKey != null
+            ? t(section.titleKey as TranslationKey)
+            : section.title || t("elaboration");
+        const titleAsHeading = section.titleKey == null && Boolean(section.title);
+
+        return (
+          <ContentSection
+            key={section.id}
+            title={title}
+            titleAsHeading={titleAsHeading}
+            titleClassName={
+              index % 2 === 0 ? "text-primary" : "text-tag-target-text"
+            }
+          >
+            <FormattedBody text={section.body} />
+          </ContentSection>
+        );
+      })}
     </>
   );
 }
@@ -108,14 +121,14 @@ export function ExplanationCard({
         <Tag variant="target">{primaryFamiliarTag(data)}</Tag>
       </div>
 
-      <h2 className="cursor-default text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+      <h2 className="explanation-prose cursor-text text-xl font-bold tracking-tight text-foreground sm:text-2xl">
         {formatInlineMarkdown(data.analogyTitle)}
       </h2>
 
       {isInDepth ? (
         <>
           <div className="cursor-default">
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+            <p className="mb-3 cursor-default text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
               {t("inDepthAnalogy")}
             </p>
             <div className="flex flex-col gap-4">
