@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Card } from "./ui";
 import type { LearningTrailItem } from "@/types/explanation";
 
@@ -14,6 +15,7 @@ interface LearningTrailProps {
   onRetry?: () => void;
   heading?: string;
   eyebrow?: string;
+  viewAllHref?: string;
   viewAllLabel?: string;
 }
 
@@ -58,6 +60,7 @@ export function LearningTrail({
   onRetry,
   eyebrow = "Your learning trail",
   heading = "Keep your best “aha!” moments close.",
+  viewAllHref = "/history",
   viewAllLabel = "View saved explanations →",
 }: LearningTrailProps) {
   return (
@@ -126,9 +129,12 @@ export function LearningTrail({
         </ul>
       ) : null}
 
-      <span className="mt-1 inline-flex w-fit items-center text-sm font-medium text-primary-muted">
+      <Link
+        href={viewAllHref}
+        className="mt-1 inline-flex w-fit cursor-pointer items-center text-sm font-medium text-primary-muted transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-muted focus-visible:ring-offset-2 focus-visible:ring-offset-trail"
+      >
         {viewAllLabel}
-      </span>
+      </Link>
     </Card>
   );
 }

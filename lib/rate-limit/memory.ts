@@ -1,19 +1,18 @@
-import type { RateLimitResult } from "@/lib/rate-limit/config";
+import type { RateLimitResult, RateLimitSubject } from "@/lib/rate-limit/config";
 import { EXPLAIN_RATE_LIMIT } from "@/lib/rate-limit/config";
 
 /**
- * Fixed-window counter store for local/dev (and single-instance deploys).
- * Not shared across Vercel isolates — prefer Upstash in production.
+ * In-memory sliding-window store (MVP).
+ * Tracks request timestamps per identity.
+ * Not shared across Vercel isolates — fine for single-instance / local dev.
  */
 
 type Bucket = {
-  count: number;
-  windowStart: number;
+  /** Epoch ms of each accepted (and rejected after full) request timestamps in window */
+  timestamps: number[];
 };
 
 const buckets = new Map<string, Bucket>();
-
-/** Bound memory growth under random-IP abuse in long-lived processes */
 const MAX_KEYS = 10_000;
 
 function pruneIfNeeded() {
@@ -27,26 +26,44 @@ function pruneIfNeeded() {
   }
 }
 
-export function checkMemoryRateLimit(identifier: string): RateLimitResult {
-  const limit = EXPLAIN_RATE_LIMIT.max;
-  const windowMs = EXPLAIN_RATE_LIMIT.windowSeconds * 1000;
-  const now = Date.now();
-  const key = `${EXPLAIN_RATE_LIMIT.prefix}:${identifier}`;
+function pruneWindow(bucket: Bucket, now: number, windowMs: number) {
+  bucket.timestamps = bucket.timestamps.filter((t) => now - t < windowMs);
+}
 
-  let bucket = buckets.get(key);
-  if (!bucket || now - bucket.windowStart >= windowMs) {
-    bucket = { count: 0, windowStart: now };
-    buckets.set(key, bucket);
+export function checkMemoryRateLimit(
+  storageKey: string,
+  meta: { subject: RateLimitSubject; keyLabel: string },
+): RateLimitResult {
+  const limit = EXPLAIN_RATE_LIMIT.max;
+  const windowMs = EXPLAIN_RATE_LIMIT.windowMs;
+  const now = Date.now();
+
+  let bucket = buckets.get(storageKey);
+  if (!bucket) {
+    bucket = { timestamps: [] };
+    buckets.set(storageKey, bucket);
     pruneIfNeeded();
   }
 
-  bucket.count += 1;
-  const reset = bucket.windowStart + windowMs;
-  const remaining = Math.max(0, limit - bucket.count);
-  const success = bucket.count <= limit;
+  pruneWindow(bucket, now, windowMs);
+
+  const used = bucket.timestamps.length;
+  const success = used < limit;
+
+  if (success) {
+    bucket.timestamps.push(now);
+  }
+
+  const remaining = Math.max(0, limit - bucket.timestamps.length);
+  const oldest = bucket.timestamps[0] ?? now;
+  const reset = success
+    ? oldest + windowMs
+    : oldest + windowMs;
+
+  // When blocked, reset when oldest request exits the window
   const retryAfterSeconds = success
     ? 0
-    : Math.max(1, Math.ceil((reset - now) / 1000));
+    : Math.max(1, Math.ceil((oldest + windowMs - now) / 1000));
 
   return {
     success,
@@ -54,5 +71,12 @@ export function checkMemoryRateLimit(identifier: string): RateLimitResult {
     remaining: success ? remaining : 0,
     reset,
     retryAfterSeconds,
+    subject: meta.subject,
+    keyLabel: meta.keyLabel,
   };
+}
+
+/** Test helper — clear all in-memory counters */
+export function clearMemoryRateLimits(): void {
+  buckets.clear();
 }

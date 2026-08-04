@@ -8,18 +8,27 @@ import type {
 export type LearningTrailListResponse = ApiResponse<LearningTrailItem[]>;
 
 /**
- * Client helpers for explanation history.
- * UI → these modules → API routes → services → Supabase
+ * Client helpers for guest Learning Trail / explanation history.
+ *
+ * Frontend → /api/explanations → queries service → Supabase (guest_id filtered)
+ * Never imports service-role keys or queries Supabase from the browser.
  */
+
+const fetchOptions: RequestInit = {
+  method: "GET",
+  headers: { Accept: "application/json" },
+  cache: "no-store",
+  // Ensure httpOnly analogify_guest_id cookie is sent on same-origin requests
+  credentials: "same-origin",
+};
 
 export async function fetchLearningTrail(
   limit = 10,
 ): Promise<LearningTrailItem[]> {
-  const response = await fetch(`/api/explanations?limit=${limit}`, {
-    method: "GET",
-    headers: { Accept: "application/json" },
-    cache: "no-store",
-  });
+  const response = await fetch(
+    `/api/explanations?limit=${limit}`,
+    fetchOptions,
+  );
 
   let payload: LearningTrailListResponse;
   try {
@@ -29,20 +38,22 @@ export async function fetchLearningTrail(
   }
 
   if (!payload.success || !payload.data) {
-    throw new Error(payload.error ?? "Failed to load learning trail");
+    throw new Error(
+      payload.error ?? "We couldn’t load your learning trail right now.",
+    );
   }
 
   return payload.data;
 }
 
+/** Loads a saved explanation by id — no AI generation. */
 export async function fetchExplanationById(
   id: string,
 ): Promise<Explanation> {
-  const response = await fetch(`/api/explanations/${encodeURIComponent(id)}`, {
-    method: "GET",
-    headers: { Accept: "application/json" },
-    cache: "no-store",
-  });
+  const response = await fetch(
+    `/api/explanations/${encodeURIComponent(id)}`,
+    fetchOptions,
+  );
 
   let payload: ExplainApiResponse;
   try {
@@ -52,7 +63,9 @@ export async function fetchExplanationById(
   }
 
   if (!payload.success || !payload.data) {
-    throw new Error(payload.error ?? "Failed to load explanation");
+    throw new Error(
+      payload.error ?? "We couldn’t load that explanation right now.",
+    );
   }
 
   return payload.data;

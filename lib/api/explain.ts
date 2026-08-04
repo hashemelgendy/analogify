@@ -5,10 +5,9 @@ import type {
 } from "@/types/explanation";
 
 /**
- * Client helper for POST /api/explain.
- * UI → this module → API route → explain-service → AI layer
- *
- * Components only receive `Explanation`; they never touch the API envelope.
+ * Client helpers for explain flow.
+ * UI → this module → API route → explain-service → AI / persistence
+ * Credentials ensure guest cookie is included on same-origin calls.
  */
 export async function requestExplanation(
   body: ExplainRequest,
@@ -17,8 +16,10 @@ export async function requestExplanation(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Accept: "application/json",
     },
     body: JSON.stringify(body),
+    credentials: "same-origin",
   });
 
   let payload: ExplainApiResponse;

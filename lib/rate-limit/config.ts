@@ -1,9 +1,11 @@
 /**
- * Shared rate-limit configuration (server-only).
+ * Rate-limit configuration for POST /api/explain (server-only).
  *
- * Adjust via env without code changes:
- *   RATE_LIMIT_EXPLAIN_MAX              default 10
- *   RATE_LIMIT_EXPLAIN_WINDOW_SECONDS   default 60
+ * Defaults: 10 requests per hour per guest (or IP if no guest cookie).
+ *
+ * Override without code changes:
+ *   RATE_LIMIT_EXPLAIN_MAX=10
+ *   RATE_LIMIT_EXPLAIN_WINDOW_SECONDS=3600
  */
 
 function positiveInt(value: string | undefined, fallback: number): number {
@@ -13,24 +15,33 @@ function positiveInt(value: string | undefined, fallback: number): number {
 }
 
 export const EXPLAIN_RATE_LIMIT = {
-  /** Max requests per IP in the window */
+  /** Max requests per identity in the rolling window */
   get max() {
     return positiveInt(process.env.RATE_LIMIT_EXPLAIN_MAX, 10);
   },
-  /** Window length in seconds */
+  /** Window length in seconds (default 1 hour) */
   get windowSeconds() {
-    return positiveInt(process.env.RATE_LIMIT_EXPLAIN_WINDOW_SECONDS, 60);
+    return positiveInt(process.env.RATE_LIMIT_EXPLAIN_WINDOW_SECONDS, 3600);
   },
-  /** Prefix for Redis keys / diagnostics */
+  get windowMs() {
+    return this.windowSeconds * 1000;
+  },
+  /** Key prefix for stores */
   prefix: "analogify:ratelimit:explain",
 } as const;
+
+export type RateLimitSubject = "guest" | "ip";
 
 export type RateLimitResult = {
   success: boolean;
   limit: number;
   remaining: number;
-  /** Unix epoch ms when the current window resets */
+  /** Unix epoch ms when the oldest counted request falls out of the window */
   reset: number;
   /** Seconds until a retry is allowed when blocked */
   retryAfterSeconds: number;
+  /** How this request was identified */
+  subject: RateLimitSubject;
+  /** Opaque key used for storage (safe to log without full guest UUID if preferred) */
+  keyLabel: string;
 };

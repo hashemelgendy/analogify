@@ -1,10 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  DEFAULT_FORM_VALUES,
-  SUGGESTED_TOPICS,
-} from "@/data/mock";
+import { DEFAULT_FORM_VALUES, SUGGESTED_TOPICS } from "@/data/mock";
 import { toFriendlyExplainError } from "@/lib/client/explain-errors";
 import {
   parseFamiliarTopicsInput,
@@ -33,6 +30,7 @@ import { Hero } from "./Hero";
 import { InputCard } from "./InputCard";
 import { LearningTrail } from "./LearningTrail";
 
+/** Newest explanations for the current guest (API default max handled server-side). */
 const TRAIL_LIMIT = 10;
 
 export function HomePage() {
@@ -47,10 +45,17 @@ export function HomePage() {
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [isSavingFeedback, setIsSavingFeedback] = useState(false);
 
+  // Learning Trail — real API data only (no mock)
   const [trailItems, setTrailItems] = useState<LearningTrailItem[]>([]);
   const [trailLoading, setTrailLoading] = useState(true);
   const [trailError, setTrailError] = useState<string | null>(null);
   const [isSelectingTrail, setIsSelectingTrail] = useState(false);
+  const [lastSelectedTrailId, setLastSelectedTrailId] = useState<string | null>(
+    null,
+  );
+  const [errorSource, setErrorSource] = useState<"generate" | "select" | null>(
+    null,
+  );
 
   const inFlightRef = useRef(false);
 
@@ -79,7 +84,7 @@ export function HomePage() {
   }, [loadTrail]);
 
   async function createExplanation(mode: ExplanationMode = "another") {
-    if (inFlightRef.current || isLoading) return;
+    if (inFlightRef.current || isLoading || isSelectingTrail) return;
     if (!concept.trim()) return;
 
     const familiarTopics = parseFamiliarTopicsInput(familiarTopicsInput);
@@ -87,12 +92,14 @@ export function HomePage() {
       setError(
         "Add at least one familiar topic so we can ground the analogy.",
       );
+      setErrorSource("generate");
       return;
     }
 
     inFlightRef.current = true;
     setIsLoading(true);
     setError(null);
+    setErrorSource(null);
     setFeedbackError(null);
     setLastMode(mode);
 
@@ -104,31 +111,31 @@ export function HomePage() {
       });
       setExplanation(result);
       setError(null);
-      void loadTrail();
+      // Refresh guest trail after successful save path
+      await loadTrail();
     } catch (err) {
       console.error("[HomePage] explain failed:", err);
       setError(toFriendlyExplainError(err));
+      setErrorSource("generate");
     } finally {
       inFlightRef.current = false;
       setIsLoading(false);
     }
   }
 
-  function handleRetry() {
-    void createExplanation(lastMode);
-  }
-
   async function handleSelectTrailItem(item: LearningTrailItem) {
-    if (isLoading || isSelectingTrail) return;
+    if (isLoading || isSelectingTrail || inFlightRef.current) return;
 
     setIsSelectingTrail(true);
     setError(null);
+    setErrorSource(null);
     setFeedbackError(null);
+    setLastSelectedTrailId(item.id);
 
     try {
+      // DB load only — never regenerates via OpenAI
       const full = await fetchExplanationById(item.id);
       setExplanation(full);
-      // Scroll toward the result cards for UX (keeps design intact)
       document
         .getElementById("explanation-result")
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -139,9 +146,24 @@ export function HomePage() {
           ? err.message
           : "We couldn’t load that explanation right now.",
       );
+      setErrorSource("select");
     } finally {
       setIsSelectingTrail(false);
     }
+  }
+
+  function handleRetry() {
+    if (errorSource === "select" && lastSelectedTrailId) {
+      void handleSelectTrailItem({
+        id: lastSelectedTrailId,
+        label: "",
+        icon: "heart",
+        concept: "",
+        familiarTopics: [],
+      });
+      return;
+    }
+    void createExplanation(lastMode);
   }
 
   async function handleFeedback(payload: FeedbackPayload) {
@@ -221,7 +243,7 @@ export function HomePage() {
             <ExplanationErrorState
               message={error}
               onRetry={handleRetry}
-              isRetrying={isLoading}
+              isRetrying={isLoading || isSelectingTrail}
             />
           ) : null}
 
@@ -241,7 +263,7 @@ export function HomePage() {
                 }
                 concept={explanation.concept}
                 explanationId={explanation.id}
-                disabled={isSavingFeedback || isLoading}
+                disabled={isSavingFeedback || isLoading || isSelectingTrail}
                 onSubmit={handleFeedback}
               />
               {feedbackError ? (

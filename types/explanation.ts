@@ -62,7 +62,10 @@ export interface LearningTrailItem {
   concept: string;
   familiarTopics: string[];
   createdAt?: string;
+  /** Short list preview (e.g. analogy title) */
+  preview?: string;
 }
+
 
 export type LearningTrailApiResponse = ApiResponse<LearningTrailItem[]>;
 

@@ -8,12 +8,15 @@ interface ExplanationCardProps {
   data: Explanation;
   onModeChange?: (mode: ExplanationMode) => void;
   isLoading?: boolean;
+  /** Hide simpler / another / deeper actions (saved history views). */
+  showRefinementActions?: boolean;
 }
 
 export function ExplanationCard({
   data,
   onModeChange,
   isLoading = false,
+  showRefinementActions = true,
 }: ExplanationCardProps) {
   return (
     <Card className="flex flex-col gap-5">
@@ -42,32 +45,34 @@ export function ExplanationCard({
         {data.explanation}
       </p>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <Button
-          variant="secondary"
-          className="w-full sm:w-auto"
-          disabled={isLoading}
-          onClick={() => onModeChange?.("simpler")}
-        >
-          Make it simpler
-        </Button>
-        <Button
-          variant="secondary"
-          className="w-full sm:w-auto"
-          disabled={isLoading}
-          onClick={() => onModeChange?.("another")}
-        >
-          Use another analogy
-        </Button>
-        <Button
-          variant="secondary"
-          className="w-full sm:w-auto"
-          disabled={isLoading}
-          onClick={() => onModeChange?.("deeper")}
-        >
-          Explain deeper
-        </Button>
-      </div>
+      {showRefinementActions ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <Button
+            variant="secondary"
+            className="w-full sm:w-auto"
+            disabled={isLoading}
+            onClick={() => onModeChange?.("simpler")}
+          >
+            Make it simpler
+          </Button>
+          <Button
+            variant="secondary"
+            className="w-full sm:w-auto"
+            disabled={isLoading}
+            onClick={() => onModeChange?.("another")}
+          >
+            Use another analogy
+          </Button>
+          <Button
+            variant="secondary"
+            className="w-full sm:w-auto"
+            disabled={isLoading}
+            onClick={() => onModeChange?.("deeper")}
+          >
+            Explain deeper
+          </Button>
+        </div>
+      ) : null}
     </Card>
   );
 }

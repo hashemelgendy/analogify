@@ -8,7 +8,7 @@ export function Hero() {
         Understand anything through things you already know
       </h1>
       <p className="mx-auto mt-4 max-w-md text-pretty text-[15px] leading-relaxed text-muted sm:text-base">
-        Tell Analogify what feels confusing — then share the worlds you know.
+        Tell Anuminate what feels confusing — then share the worlds you know.
         We&apos;ll meet you there.
       </p>
     </section>

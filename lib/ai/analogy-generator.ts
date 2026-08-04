@@ -16,7 +16,7 @@ import type {
  * Keep the function signature and Explanation return type stable.
  */
 
-const SYSTEM_PROMPT = `You are Analogify, an AI tutor that helps people understand difficult concepts by creating personalized analogies.
+const SYSTEM_PROMPT = `You are Anuminate, an AI tutor that helps people understand difficult concepts by creating personalized analogies.
 
 The analogy should:
 - Use concepts the learner already understands

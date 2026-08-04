@@ -2,7 +2,6 @@ import type {
   Explanation,
   ExplanationMode,
   FormDefaults,
-  LearningTrailItem,
 } from "@/types/explanation";
 
 export const SUGGESTED_TOPICS = [
@@ -15,10 +14,11 @@ export const SUGGESTED_TOPICS = [
   "Programming",
 ] as const;
 
-/** Initial form values (demo defaults, not component hardcoding). */
+
+/** Initial form values — empty so inputs start blank. */
 export const DEFAULT_FORM_VALUES: FormDefaults = {
-  concept: "How does blockchain work?",
-  familiarTopics: "cooking",
+  concept: "",
+  familiarTopics: "",
 };
 
 /**
@@ -130,23 +130,5 @@ export const SAMPLE_EXPLANATIONS: Explanation[] = [
   },
 ];
 
-/** Default card content before the user generates (first catalogue entry). */
+/** Default card content for design reference / offline demos only — not used by Learning Trail UI. */
 export const SAMPLE_EXPLANATION: Explanation = SAMPLE_EXPLANATIONS[0];
-
-/** Learning trail sample (catalogue seeds only — UI loads live data). */
-export const SAMPLE_LEARNING_TRAIL: LearningTrailItem[] = [
-  {
-    id: "trail_neural_gardening",
-    label: "How neural networks learn — through gardening",
-    icon: "heart",
-    concept: "How neural networks learn",
-    familiarTopics: ["gardening"],
-  },
-  {
-    id: "trail_inflation_concerts",
-    label: "Inflation — through concert tickets",
-    icon: "trend",
-    concept: "Inflation",
-    familiarTopics: ["concert tickets"],
-  },
-];

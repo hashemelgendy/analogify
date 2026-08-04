@@ -72,6 +72,11 @@ export function trailItemFromRow(
 ): LearningTrailItem {
   const familiar = row.familiar_topics[0] ?? "familiar worlds";
   const icon: LearningTrailIcon = index % 2 === 0 ? "heart" : "trend";
+  const preview =
+    row.analogy_title.trim() ||
+    (row.analogy_content.length > 140
+      ? `${row.analogy_content.slice(0, 140).trim()}…`
+      : row.analogy_content);
 
   return {
     id: row.id,
@@ -80,6 +85,7 @@ export function trailItemFromRow(
     concept: row.concept,
     familiarTopics: row.familiar_topics,
     createdAt: row.created_at,
+    preview,
   };
 }
 

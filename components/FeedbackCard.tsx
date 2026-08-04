@@ -42,7 +42,7 @@ export function FeedbackCard({
   concept = "",
   explanationId,
   title = "Did this explanation help you understand?",
-  subtitle = "Your feedback helps Analogify learn how you learn.",
+  subtitle = "Your feedback helps Anuminate learn how you learn.",
   commentPlaceholder = "Anything to improve? (optional)",
   disabled = false,
   onSubmit,

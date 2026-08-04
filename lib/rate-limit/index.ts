@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/rate-limit/ip";
 import type { RateLimitResult } from "@/lib/rate-limit/config";
 import { EXPLAIN_RATE_LIMIT } from "@/lib/rate-limit/config";
 import { checkMemoryRateLimit } from "@/lib/rate-limit/memory";
@@ -5,49 +6,65 @@ import {
   checkUpstashRateLimit,
   isUpstashRateLimitConfigured,
 } from "@/lib/rate-limit/upstash";
+import { getOrCreateGuestId, readGuestId } from "@/lib/guest/session";
 
 export type { RateLimitResult } from "@/lib/rate-limit/config";
 export { EXPLAIN_RATE_LIMIT } from "@/lib/rate-limit/config";
+export { getClientIp } from "@/lib/rate-limit/ip";
+
+type IdentityKey = {
+  storageKey: string;
+  subject: "guest" | "ip";
+  keyLabel: string;
+};
 
 /**
- * Extract client IP for rate limiting.
- * On Vercel / reverse proxies, the left-most X-Forwarded-For hop is the client.
+ * Primary: guest_id cookie (persistent anonymous identity).
+ * Fallback: client IP if guest cookie cannot be resolved.
  */
-export function getClientIp(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
+async function resolveRateLimitIdentity(
+  request: Request,
+): Promise<IdentityKey> {
+  try {
+    // Prefer existing cookie; create if missing so limits stick across requests
+    const existing = await readGuestId();
+    const guestId = existing ?? (await getOrCreateGuestId());
+    return {
+      storageKey: `${EXPLAIN_RATE_LIMIT.prefix}:guest:${guestId}`,
+      subject: "guest",
+      keyLabel: `guest:${guestId.slice(0, 8)}…`,
+    };
+  } catch (error) {
+    console.warn(
+      "[rate-limit] guest cookie unavailable, falling back to IP:",
+      error instanceof Error ? error.message : "unknown",
+    );
+    const ip = getClientIp(request);
+    return {
+      storageKey: `${EXPLAIN_RATE_LIMIT.prefix}:ip:${ip}`,
+      subject: "ip",
+      keyLabel: `ip:${ip}`,
+    };
   }
-
-  const realIp = request.headers.get("x-real-ip")?.trim();
-  if (realIp) return realIp;
-
-  const cf = request.headers.get("cf-connecting-ip")?.trim();
-  if (cf) return cf;
-
-  const vercel = request.headers.get("x-vercel-forwarded-for")?.trim();
-  if (vercel) {
-    const first = vercel.split(",")[0]?.trim();
-    if (first) return first;
-  }
-
-  return "unknown";
 }
 
 /**
- * Rate-limit the /api/explain path per IP.
- * Prefers Upstash when configured; falls back to in-memory otherwise.
+ * Rate-limit POST /api/explain for the current guest (or IP).
+ * MVP storage: in-memory sliding window of timestamps.
+ * Optional: Upstash when REST credentials are set (distributed).
  */
 export async function rateLimitExplain(
   request: Request,
 ): Promise<RateLimitResult & { backend: "upstash" | "memory" }> {
-  const ip = getClientIp(request);
-  const identifier = `ip:${ip}`;
+  const identity = await resolveRateLimitIdentity(request);
+  const meta = {
+    subject: identity.subject,
+    keyLabel: identity.keyLabel,
+  };
 
   if (isUpstashRateLimitConfigured()) {
     try {
-      const result = await checkUpstashRateLimit(identifier);
+      const result = await checkUpstashRateLimit(identity.storageKey, meta);
       if (result) {
         return { ...result, backend: "upstash" };
       }
@@ -57,14 +74,10 @@ export async function rateLimitExplain(
         error instanceof Error ? error.message : "unknown",
       );
     }
-  } else if (process.env.NODE_ENV === "production") {
-    console.warn(
-      "[rate-limit] UPSTASH_REDIS_REST_URL/TOKEN not set — using in-memory limits (not shared across Vercel instances).",
-    );
   }
 
   return {
-    ...checkMemoryRateLimit(identifier),
+    ...checkMemoryRateLimit(identity.storageKey, meta),
     backend: "memory",
   };
 }
@@ -81,9 +94,19 @@ export function rateLimitHeaders(result: RateLimitResult): HeadersInit {
 }
 
 export function rateLimitExceededMessage(result: RateLimitResult): string {
-  const window = EXPLAIN_RATE_LIMIT.windowSeconds;
+  const max = result.limit;
+  const windowSec = EXPLAIN_RATE_LIMIT.windowSeconds;
+  const windowLabel =
+    windowSec >= 3600 && windowSec % 3600 === 0
+      ? `${windowSec / 3600} hour${windowSec / 3600 === 1 ? "" : "s"}`
+      : windowSec >= 60 && windowSec % 60 === 0
+        ? `${windowSec / 60} minute${windowSec / 60 === 1 ? "" : "s"}`
+        : `${windowSec} second${windowSec === 1 ? "" : "s"}`;
+
   return (
-    `Rate limit exceeded: max ${result.limit} explanation requests per ${window}s per IP. ` +
-    `Try again in ${result.retryAfterSeconds} second${result.retryAfterSeconds === 1 ? "" : "s"}.`
+    `You’ve reached the limit of ${max} explanations per ${windowLabel}. ` +
+    `Please try again in ${result.retryAfterSeconds} second${
+      result.retryAfterSeconds === 1 ? "" : "s"
+    }.`
   );
 }

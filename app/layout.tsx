@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Analogify — Learning, made familiar",
+  title: "Anuminate — Illuminate your understanding",
   description:
-    "Understand anything through things you already know. Analogify explains complex topics with personalized analogies.",
+    "Understand anything through things you already know. Anuminate explains complex topics with personalized analogies.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

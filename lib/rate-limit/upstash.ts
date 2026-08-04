@@ -1,18 +1,16 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
-import type { RateLimitResult } from "@/lib/rate-limit/config";
+import type { RateLimitResult, RateLimitSubject } from "@/lib/rate-limit/config";
 import { EXPLAIN_RATE_LIMIT } from "@/lib/rate-limit/config";
 
 /**
- * Distributed fixed-window rate limit via Upstash Redis (Vercel-friendly).
- * Requires UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN (server-only).
+ * Optional distributed sliding-window via Upstash (shared across Vercel instances).
+ * Env: UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN
  */
 
 let limiter: Ratelimit | null | undefined;
 
-function getUpstashCredentials():
-  | { url: string; token: string }
-  | null {
+function getCredentials(): { url: string; token: string } | null {
   const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
   const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
   if (!url || !token) return null;
@@ -20,26 +18,21 @@ function getUpstashCredentials():
 }
 
 export function isUpstashRateLimitConfigured(): boolean {
-  return getUpstashCredentials() !== null;
+  return getCredentials() !== null;
 }
 
 function getLimiter(): Ratelimit | null {
   if (limiter !== undefined) return limiter;
 
-  const creds = getUpstashCredentials();
+  const creds = getCredentials();
   if (!creds) {
     limiter = null;
     return null;
   }
 
-  const redis = new Redis({
-    url: creds.url,
-    token: creds.token,
-  });
-
   limiter = new Ratelimit({
-    redis,
-    limiter: Ratelimit.fixedWindow(
+    redis: new Redis({ url: creds.url, token: creds.token }),
+    limiter: Ratelimit.slidingWindow(
       EXPLAIN_RATE_LIMIT.max,
       `${EXPLAIN_RATE_LIMIT.windowSeconds} s`,
     ),
@@ -50,18 +43,18 @@ function getLimiter(): Ratelimit | null {
   return limiter;
 }
 
-/** Reset cached limiter (e.g. after env changes in tests). */
 export function resetUpstashLimiterCache(): void {
   limiter = undefined;
 }
 
 export async function checkUpstashRateLimit(
-  identifier: string,
+  storageKey: string,
+  meta: { subject: RateLimitSubject; keyLabel: string },
 ): Promise<RateLimitResult | null> {
   const client = getLimiter();
   if (!client) return null;
 
-  const result = await client.limit(identifier);
+  const result = await client.limit(storageKey);
   const now = Date.now();
   const retryAfterSeconds = result.success
     ? 0
@@ -73,5 +66,7 @@ export async function checkUpstashRateLimit(
     remaining: result.remaining,
     reset: result.reset,
     retryAfterSeconds,
+    subject: meta.subject,
+    keyLabel: meta.keyLabel,
   };
 }

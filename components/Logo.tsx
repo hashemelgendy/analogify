@@ -27,7 +27,7 @@ export function Logo({ className = "" }: { className?: string }) {
         </svg>
       </span>
       <span className="text-[17px] font-semibold tracking-tight text-foreground">
-        Analogify
+        Anuminate
       </span>
     </div>
   );

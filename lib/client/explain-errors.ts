@@ -13,7 +13,7 @@ export function toFriendlyExplainError(error: unknown): string {
     lower.includes("network request failed") ||
     lower.includes("load failed")
   ) {
-    return "We couldn’t reach Analogify. Check your connection and try again.";
+    return "We couldn’t reach Anuminate. Check your connection and try again.";
   }
 
   if (
