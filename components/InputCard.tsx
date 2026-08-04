@@ -22,6 +22,8 @@ export function InputCard({
   isLoading = false,
 }: InputCardProps) {
   function handleTopicChip(chip: string) {
+    if (isLoading) return;
+
     if (!familiarTopics.trim()) {
       onFamiliarTopicsChange(chip.toLowerCase());
       return;
@@ -43,6 +45,7 @@ export function InputCard({
         className="flex flex-col gap-6"
         onSubmit={(event) => {
           event.preventDefault();
+          if (isLoading || !concept.trim()) return;
           onSubmit();
         }}
       >
@@ -53,6 +56,7 @@ export function InputCard({
           onChange={(event) => onConceptChange(event.target.value)}
           placeholder="e.g. How does blockchain work?"
           autoComplete="off"
+          disabled={isLoading}
         />
 
         <div className="flex flex-col gap-3">
@@ -63,6 +67,7 @@ export function InputCard({
             onChange={(event) => onFamiliarTopicsChange(event.target.value)}
             placeholder="e.g. cooking, gaming, fitness..."
             autoComplete="off"
+            disabled={isLoading}
           />
           <p className="flex cursor-default flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-muted">
             <span>Try a familiar world:</span>
@@ -76,7 +81,8 @@ export function InputCard({
                 <button
                   type="button"
                   onClick={() => handleTopicChip(chip)}
-                  className="cursor-pointer font-medium text-primary transition-colors hover:text-primary-hover"
+                  disabled={isLoading}
+                  className="cursor-pointer font-medium text-primary transition-colors hover:text-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {chip}
                 </button>
@@ -85,10 +91,19 @@ export function InputCard({
           </p>
         </div>
 
-        <div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
           <Button type="submit" disabled={isLoading || !concept.trim()}>
-            {isLoading ? "Creating…" : "Create Explanation"}
+            {isLoading ? "Creating Explanation..." : "Create Explanation"}
           </Button>
+          {isLoading ? (
+            <p
+              className="text-sm text-muted"
+              role="status"
+              aria-live="polite"
+            >
+              Building a personalized analogy for you…
+            </p>
+          ) : null}
         </div>
       </form>
     </Card>

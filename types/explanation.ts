@@ -11,6 +11,8 @@ export type LearningTrailIcon = "heart" | "trend";
  * Returned inside ApiResponse.data from POST /api/explain.
  */
 export interface Explanation {
+  /** Database row id when persisted (may be undefined if save failed / not configured) */
+  id?: string;
   concept: string;
   familiarTopics: string[];
   analogyTitle: string;
@@ -18,6 +20,9 @@ export interface Explanation {
   explanation: string;
   keyPoints: string[];
   difficultyLevel: DifficultyLevel;
+  /** How this explanation was generated (echoed for clients that need it) */
+  generationMode?: ExplanationMode;
+  modelUsed?: string;
   rating?: number;
   createdAt?: string;
 }
@@ -54,7 +59,12 @@ export interface LearningTrailItem {
   id: string;
   label: string;
   icon: LearningTrailIcon;
+  concept: string;
+  familiarTopics: string[];
+  createdAt?: string;
 }
+
+export type LearningTrailApiResponse = ApiResponse<LearningTrailItem[]>;
 
 export interface FormDefaults {
   concept: string;
@@ -64,8 +74,28 @@ export interface FormDefaults {
 
 export type FeedbackRating = 1 | 2 | 3 | 4 | 5;
 
+/** Client → POST /api/feedback body */
+export interface FeedbackRequest {
+  explanationId: string;
+  rating: FeedbackRating;
+  comment?: string;
+}
+
+export interface FeedbackResult {
+  id: string;
+  explanationId: string;
+  rating: FeedbackRating;
+  comment: string | null;
+  createdAt: string;
+}
+
+/** @deprecated Prefer FeedbackRequest; kept for FeedbackCard local callbacks */
 export interface FeedbackPayload {
-  concept: string;
+  explanationId?: string;
+  concept?: string;
   rating: FeedbackRating;
   comment: string;
 }
+
+export type FeedbackApiResponse = ApiResponse<FeedbackResult>;
+

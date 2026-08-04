@@ -1,3 +1,5 @@
+"use client";
+
 import { Card } from "./ui";
 import type { LearningTrailItem } from "@/types/explanation";
 
@@ -5,9 +7,13 @@ export type { LearningTrailItem };
 
 interface LearningTrailProps {
   items: LearningTrailItem[];
+  isLoading?: boolean;
+  error?: string | null;
+  activeId?: string | null;
+  onSelect?: (item: LearningTrailItem) => void;
+  onRetry?: () => void;
   heading?: string;
   eyebrow?: string;
-  viewAllHref?: string;
   viewAllLabel?: string;
 }
 
@@ -45,13 +51,17 @@ function TrendIcon() {
 
 export function LearningTrail({
   items,
+  isLoading = false,
+  error = null,
+  activeId = null,
+  onSelect,
+  onRetry,
   eyebrow = "Your learning trail",
   heading = "Keep your best “aha!” moments close.",
-  viewAllHref = "#history",
   viewAllLabel = "View saved explanations →",
 }: LearningTrailProps) {
   return (
-    <Card variant="dark" className="flex flex-col gap-5">
+    <Card variant="dark" className="flex flex-col gap-5" id="history">
       <div className="cursor-default">
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-muted">
           {eyebrow}
@@ -61,24 +71,64 @@ export function LearningTrail({
         </h3>
       </div>
 
-      <ul className="flex flex-col gap-3.5">
-        {items.map((item) => (
-          <li
-            key={item.id}
-            className="flex cursor-default items-start gap-3 text-[15px] text-white/95"
-          >
-            {item.icon === "heart" ? <HeartIcon /> : <TrendIcon />}
-            <span>{item.label}</span>
-          </li>
-        ))}
-      </ul>
+      {isLoading ? (
+        <p
+          className="text-[15px] text-white/70"
+          role="status"
+          aria-live="polite"
+        >
+          Loading your learning trail…
+        </p>
+      ) : null}
 
-      <a
-        href={viewAllHref}
-        className="mt-1 inline-flex w-fit cursor-pointer items-center text-sm font-medium text-primary-muted transition-colors hover:text-white"
-      >
+      {!isLoading && error ? (
+        <div className="flex flex-col gap-3" role="alert">
+          <p className="text-[15px] text-white/80">{error}</p>
+          {onRetry ? (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="inline-flex w-fit cursor-pointer text-sm font-medium text-primary-muted transition-colors hover:text-white"
+            >
+              Try again
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!isLoading && !error && items.length === 0 ? (
+        <p className="text-[15px] text-white/70">
+          Your saved explanations will show up here after you create one.
+        </p>
+      ) : null}
+
+      {!isLoading && !error && items.length > 0 ? (
+        <ul className="flex flex-col gap-3.5">
+          {items.map((item) => {
+            const isActive = activeId === item.id;
+            return (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect?.(item)}
+                  className={`flex w-full cursor-pointer items-start gap-3 rounded-xl text-left text-[15px] text-white/95 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-muted focus-visible:ring-offset-2 focus-visible:ring-offset-trail ${
+                    isActive
+                      ? "bg-white/10 px-3 py-2"
+                      : "px-0 py-0 hover:text-white"
+                  }`}
+                >
+                  {item.icon === "heart" ? <HeartIcon /> : <TrendIcon />}
+                  <span className="min-w-0 flex-1">{item.label}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+
+      <span className="mt-1 inline-flex w-fit items-center text-sm font-medium text-primary-muted">
         {viewAllLabel}
-      </a>
+      </span>
     </Card>
   );
 }

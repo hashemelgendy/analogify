@@ -1,16 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { Card, Input } from "./ui";
+import { Button, Card, Input } from "./ui";
 import type { FeedbackPayload, FeedbackRating } from "@/types/explanation";
 
 interface FeedbackCardProps {
   concept?: string;
-  rating?: number;
+  explanationId?: string;
   title?: string;
   subtitle?: string;
   commentPlaceholder?: string;
-  onSubmit?: (payload: FeedbackPayload) => void;
+  /** Blocks interaction while a parent request is in flight */
+  disabled?: boolean;
+  /**
+   * Called only on explicit "Submit Feedback" click.
+   * Resolve to mark submitted; reject/throw to leave form editable.
+   */
+  onSubmit?: (payload: FeedbackPayload) => void | Promise<void>;
 }
 
 function StarIcon({ filled }: { filled: boolean }) {
@@ -34,23 +40,52 @@ function StarIcon({ filled }: { filled: boolean }) {
 
 export function FeedbackCard({
   concept = "",
-  rating: initialRating,
+  explanationId,
   title = "Did this explanation help you understand?",
   subtitle = "Your feedback helps Analogify learn how you learn.",
   commentPlaceholder = "Anything to improve? (optional)",
+  disabled = false,
   onSubmit,
 }: FeedbackCardProps) {
-  const [rating, setRating] = useState(initialRating ?? 0);
+  const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState("");
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
-  function handleRate(value: FeedbackRating) {
+  const locked = disabled || isSubmitting || isSubmitted;
+
+  function handleSelectRating(value: FeedbackRating) {
+    if (locked) return;
     setRating(value);
-    onSubmit?.({
-      concept,
-      rating: value,
-      comment,
-    });
+    setValidationError(null);
+  }
+
+  async function handleSubmit() {
+    if (locked) return;
+
+    if (rating < 1) {
+      setValidationError("Please select a star rating before submitting.");
+      return;
+    }
+
+    setValidationError(null);
+    setIsSubmitting(true);
+
+    try {
+      await onSubmit?.({
+        explanationId,
+        concept,
+        rating: rating as FeedbackRating,
+        comment,
+      });
+      setIsSubmitted(true);
+    } catch {
+      // Parent already surfaces API errors; keep form editable for another try
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -76,12 +111,17 @@ export function FeedbackCard({
               role="radio"
               aria-checked={rating === value}
               aria-label={`${value} star${value === 1 ? "" : "s"}`}
-              onMouseEnter={() => setHoverRating(value)}
+              disabled={locked}
+              onMouseEnter={() => {
+                if (!locked) setHoverRating(value);
+              }}
               onMouseLeave={() => setHoverRating(0)}
-              onFocus={() => setHoverRating(value)}
+              onFocus={() => {
+                if (!locked) setHoverRating(value);
+              }}
               onBlur={() => setHoverRating(0)}
-              onClick={() => handleRate(value)}
-              className="cursor-pointer rounded-md p-0.5 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              onClick={() => handleSelectRating(value)}
+              className="cursor-pointer rounded-md p-0.5 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <StarIcon filled={active} />
             </button>
@@ -95,7 +135,33 @@ export function FeedbackCard({
         onChange={(event) => setComment(event.target.value)}
         placeholder={commentPlaceholder}
         aria-label="Optional feedback"
+        disabled={locked}
       />
+
+      {validationError ? (
+        <p className="text-sm text-muted" role="alert">
+          {validationError}
+        </p>
+      ) : null}
+
+      {isSubmitted ? (
+        <p className="text-sm font-medium text-primary" role="status">
+          Thanks — your feedback was submitted.
+        </p>
+      ) : (
+        <div>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              void handleSubmit();
+            }}
+            disabled={locked}
+          >
+            {isSubmitting ? "Submitting…" : "Submit Feedback"}
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }

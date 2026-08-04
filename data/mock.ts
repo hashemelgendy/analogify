@@ -133,16 +133,20 @@ export const SAMPLE_EXPLANATIONS: Explanation[] = [
 /** Default card content before the user generates (first catalogue entry). */
 export const SAMPLE_EXPLANATION: Explanation = SAMPLE_EXPLANATIONS[0];
 
-/** Learning trail UI items derived from saved samples. */
+/** Learning trail sample (catalogue seeds only — UI loads live data). */
 export const SAMPLE_LEARNING_TRAIL: LearningTrailItem[] = [
   {
     id: "trail_neural_gardening",
     label: "How neural networks learn — through gardening",
     icon: "heart",
+    concept: "How neural networks learn",
+    familiarTopics: ["gardening"],
   },
   {
     id: "trail_inflation_concerts",
     label: "Inflation — through concert tickets",
     icon: "trend",
+    concept: "Inflation",
+    familiarTopics: ["concert tickets"],
   },
 ];

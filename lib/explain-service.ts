@@ -1,6 +1,9 @@
 import { generateAnalogyExplanation } from "@/lib/ai/analogy-generator";
+import { persistExplanation } from "@/lib/explanations/persist";
+import { resolveAccessIdentity } from "@/lib/guest/session";
 import type {
   Explanation,
+  ExplanationMode,
   ExplainRequest,
   GenerateAnalogyInput,
 } from "@/types/explanation";
@@ -8,15 +11,13 @@ import type {
 /**
  * Application service for explanations.
  *
- * Orchestrates validation + generation. The API route calls this layer only.
+ * Orchestrates guest identity → AI generation → isolated Supabase persistence.
  *
  *   app/api/explain/route.ts
  *           ↓
- *   lib/explain-service.ts   ← you are here
+ *   lib/explain-service.ts
  *           ↓
- *   lib/ai/analogy-generator.ts
- *           ↓
- *   OpenAI / mock implementation
+ *   lib/ai/analogy-generator.ts + lib/explanations/persist.ts
  */
 
 export class ExplainValidationError extends Error {
@@ -90,13 +91,40 @@ export function parseExplainRequest(body: unknown): GenerateAnalogyInput {
   };
 }
 
+function resolveModelUsed(): string {
+  if (!process.env.OPENAI_API_KEY?.trim()) {
+    return "mock";
+  }
+  return process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
+}
+
 /**
  * Create an explanation for the given request body.
- * Delegates generation to the AI layer — swap only that layer for real models.
+ * Attaches guest_id (or future user_id) so trail history stays isolated.
  */
 export async function createExplanation(
   body: unknown,
 ): Promise<Explanation> {
   const input = parseExplainRequest(body);
-  return generateAnalogyExplanation(input);
+  const generationMode: ExplanationMode = input.mode ?? "another";
+  const modelUsed = resolveModelUsed();
+  const identity = await resolveAccessIdentity();
+
+  const explanation = await generateAnalogyExplanation(input);
+
+  const id = await persistExplanation({
+    input,
+    explanation,
+    generationMode,
+    modelUsed,
+    guestId: identity.guestId,
+    userId: identity.userId,
+  });
+
+  return {
+    ...explanation,
+    id: id ?? undefined,
+    generationMode,
+    modelUsed,
+  };
 }
