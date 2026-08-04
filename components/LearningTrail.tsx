@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Card } from "./ui";
+import { useLanguage } from "@/lib/i18n";
 import type { LearningTrailItem } from "@/types/explanation";
+import { Card } from "./ui";
 
 export type { LearningTrailItem };
 
@@ -51,6 +52,20 @@ function TrendIcon() {
   );
 }
 
+/** Label is composed on the client so "through" follows the UI language. */
+function formatTrailLabel(
+  item: LearningTrailItem,
+  throughWord: string,
+): string {
+  const familiar = item.familiarTopics[0]?.trim();
+  if (!familiar) {
+    return item.concept || item.label;
+  }
+  // Match previous English trail copy: "Concept — through cooking"
+  const connector = throughWord.toLocaleLowerCase();
+  return `${item.concept} — ${connector} ${familiar}`;
+}
+
 export function LearningTrail({
   items,
   isLoading = false,
@@ -58,19 +73,21 @@ export function LearningTrail({
   activeId = null,
   onSelect,
   onRetry,
-  eyebrow = "Your learning trail",
-  heading = "Keep your best “aha!” moments close.",
+  eyebrow,
+  heading,
   viewAllHref = "/history",
-  viewAllLabel = "View saved explanations →",
+  viewAllLabel,
 }: LearningTrailProps) {
+  const { t } = useLanguage();
+
   return (
     <Card variant="dark" className="flex flex-col gap-5" id="history">
       <div className="cursor-default">
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-muted">
-          {eyebrow}
+          {eyebrow ?? t("trailEyebrow")}
         </p>
         <h3 className="text-xl font-bold tracking-tight text-white sm:text-2xl">
-          {heading}
+          {heading ?? t("trailHeading")}
         </h3>
       </div>
 
@@ -80,7 +97,7 @@ export function LearningTrail({
           role="status"
           aria-live="polite"
         >
-          Loading your learning trail…
+          {t("trailLoading")}
         </p>
       ) : null}
 
@@ -93,16 +110,14 @@ export function LearningTrail({
               onClick={onRetry}
               className="inline-flex w-fit cursor-pointer text-sm font-medium text-primary-muted transition-colors hover:text-white"
             >
-              Try again
+              {t("trailTryAgain")}
             </button>
           ) : null}
         </div>
       ) : null}
 
       {!isLoading && !error && items.length === 0 ? (
-        <p className="text-[15px] text-white/70">
-          Your saved explanations will show up here after you create one.
-        </p>
+        <p className="text-[15px] text-white/70">{t("trailEmpty")}</p>
       ) : null}
 
       {!isLoading && !error && items.length > 0 ? (
@@ -114,14 +129,16 @@ export function LearningTrail({
                 <button
                   type="button"
                   onClick={() => onSelect?.(item)}
-                  className={`flex w-full cursor-pointer items-start gap-3 rounded-xl text-left text-[15px] text-white/95 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-muted focus-visible:ring-offset-2 focus-visible:ring-offset-trail ${
+                  className={`flex w-full cursor-pointer items-start gap-3 rounded-xl text-start text-[15px] text-white/95 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-muted focus-visible:ring-offset-2 focus-visible:ring-offset-trail ${
                     isActive
                       ? "bg-white/10 px-3 py-2"
                       : "px-0 py-0 hover:text-white"
                   }`}
                 >
                   {item.icon === "heart" ? <HeartIcon /> : <TrendIcon />}
-                  <span className="min-w-0 flex-1">{item.label}</span>
+                  <span className="min-w-0 flex-1">
+                    {formatTrailLabel(item, t("historyThrough"))}
+                  </span>
                 </button>
               </li>
             );
@@ -133,7 +150,7 @@ export function LearningTrail({
         href={viewAllHref}
         className="mt-1 inline-flex w-fit cursor-pointer items-center text-sm font-medium text-primary-muted transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-muted focus-visible:ring-offset-2 focus-visible:ring-offset-trail"
       >
-        {viewAllLabel}
+        {viewAllLabel ?? t("trailViewAll")}
       </Link>
     </Card>
   );

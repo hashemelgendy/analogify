@@ -1,12 +1,20 @@
 import Link from "next/link";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 import { Logo } from "./Logo";
 
 interface HeaderProps {
-  /** Optional right-side content (defaults to brand tagline) */
+  /** Optional right-side content (shown next to the language switcher) */
   trailing?: React.ReactNode;
+  /** Show brand tagline when no custom trailing content */
+  showTagline?: boolean;
+  tagline?: string;
 }
 
-export function Header({ trailing }: HeaderProps = {}) {
+export function Header({
+  trailing,
+  showTagline = true,
+  tagline = "Illuminate your understanding",
+}: HeaderProps = {}) {
   return (
     <header className="flex cursor-default items-center justify-between gap-4">
       <Link
@@ -15,11 +23,15 @@ export function Header({ trailing }: HeaderProps = {}) {
       >
         <Logo />
       </Link>
-      {trailing ?? (
-        <p className="text-right text-sm text-muted-light">
-          Illuminate your understanding
-        </p>
-      )}
+      <div className="flex items-center gap-3 sm:gap-4">
+        {trailing ??
+          (showTagline ? (
+            <p className="hidden text-end text-sm text-muted-light sm:block">
+              {tagline}
+            </p>
+          ) : null)}
+        <LanguageSwitcher />
+      </div>
     </header>
   );
 }

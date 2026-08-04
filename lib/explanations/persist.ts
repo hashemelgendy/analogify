@@ -80,6 +80,7 @@ export function trailItemFromRow(
 
   return {
     id: row.id,
+    // UI formats "through" with i18n; keep a plain English fallback for API/debug only.
     label: `${row.concept} — through ${familiar}`,
     icon,
     concept: row.concept,
@@ -140,18 +141,29 @@ export async function persistExplanation(
 }
 
 export type FetchExplanationsResult =
-  | { ok: true; rows: ExplanationRow[] }
+  | { ok: true; rows: ExplanationRow[]; total: number }
   | { ok: false; error: string };
+
+export interface FetchExplanationsOptions {
+  limit?: number;
+  /** Zero-based row offset for pagination */
+  offset?: number;
+}
 
 /**
  * Recent explanations for a single owner identity, newest first.
  * Authenticated users: filter by user_id.
  * Guests: filter by guest_id.
+ * Supports limit + offset; total is the full matching count for that owner.
  */
 export async function fetchRecentExplanationRows(
   identity: AccessIdentity,
-  limit = 10,
+  options: FetchExplanationsOptions | number = {},
 ): Promise<FetchExplanationsResult> {
+  // Back-compat: callers that passed a bare limit number
+  const opts: FetchExplanationsOptions =
+    typeof options === "number" ? { limit: options } : options;
+
   if (!isSupabaseServiceRoleConfigured()) {
     return {
       ok: false,
@@ -160,18 +172,20 @@ export async function fetchRecentExplanationRows(
   }
 
   if (!identity.userId && !identity.guestId) {
-    return { ok: true, rows: [] };
+    return { ok: true, rows: [], total: 0 };
   }
 
-  const safeLimit = Math.min(Math.max(1, limit), 50);
+  const safeLimit = Math.min(Math.max(1, opts.limit ?? 10), 50);
+  const safeOffset = Math.max(0, opts.offset ?? 0);
+  const rangeEnd = safeOffset + safeLimit - 1;
 
   try {
     const supabase = createServiceRoleSupabaseClient();
     let query = supabase
       .from("explanations")
-      .select("*")
+      .select("*", { count: "exact" })
       .order("created_at", { ascending: false })
-      .limit(safeLimit);
+      .range(safeOffset, rangeEnd);
 
     if (identity.userId) {
       query = query.eq("user_id", identity.userId);
@@ -179,7 +193,7 @@ export async function fetchRecentExplanationRows(
       query = query.eq("guest_id", identity.guestId);
     }
 
-    const { data, error } = await query;
+    const { data, error, count } = await query;
 
     if (error) {
       console.error("[explanations.fetchRecent] Failed:", {
@@ -189,7 +203,11 @@ export async function fetchRecentExplanationRows(
       return { ok: false, error: error.message };
     }
 
-    return { ok: true, rows: data ?? [] };
+    return {
+      ok: true,
+      rows: data ?? [],
+      total: count ?? data?.length ?? 0,
+    };
   } catch (error) {
     console.error(
       "[explanations.fetchRecent] Unexpected:",

@@ -26,14 +26,31 @@ export class ExplanationQueryError extends Error {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+export interface LearningTrailPage {
+  items: LearningTrailItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  page: number;
+  totalPages: number;
+}
+
 /**
  * Latest saved explanations for the current guest/user (newest first).
+ * Supports limit + offset for history pagination.
  */
 export async function getLearningTrailItems(
   limit = 10,
-): Promise<LearningTrailItem[]> {
+  offset = 0,
+): Promise<LearningTrailPage> {
   const identity = await resolveAccessIdentity();
-  const result = await fetchRecentExplanationRows(identity, limit);
+  const safeLimit = Math.min(Math.max(1, limit), 50);
+  const safeOffset = Math.max(0, offset);
+
+  const result = await fetchRecentExplanationRows(identity, {
+    limit: safeLimit,
+    offset: safeOffset,
+  });
 
   if (!result.ok) {
     throw new ExplanationQueryError(
@@ -42,7 +59,22 @@ export async function getLearningTrailItems(
     );
   }
 
-  return result.rows.map((row, index) => trailItemFromRow(row, index));
+  const items = result.rows.map((row, index) =>
+    trailItemFromRow(row, safeOffset + index),
+  );
+  const total = result.total;
+  const totalPages = total === 0 ? 0 : Math.ceil(total / safeLimit);
+  const page =
+    safeOffset === 0 ? 1 : Math.floor(safeOffset / safeLimit) + 1;
+
+  return {
+    items,
+    total,
+    limit: safeLimit,
+    offset: safeOffset,
+    page,
+    totalPages,
+  };
 }
 
 /**

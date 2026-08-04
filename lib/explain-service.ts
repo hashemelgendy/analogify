@@ -1,11 +1,13 @@
 import { generateAnalogyExplanation } from "@/lib/ai/analogy-generator";
 import { persistExplanation } from "@/lib/explanations/persist";
 import { resolveAccessIdentity } from "@/lib/guest/session";
+import { isLanguage } from "@/lib/i18n/types";
 import type {
   Explanation,
   ExplanationMode,
   ExplainRequest,
   GenerateAnalogyInput,
+  Language,
 } from "@/types/explanation";
 
 /**
@@ -50,7 +52,8 @@ export function parseExplainRequest(body: unknown): GenerateAnalogyInput {
     throw new ExplainValidationError("Invalid JSON body");
   }
 
-  const { concept, familiarTopics, mode } = body as Partial<ExplainRequest>;
+  const { concept, familiarTopics, mode, language } =
+    body as Partial<ExplainRequest>;
 
   if (typeof concept !== "string" || !concept.trim()) {
     throw new ExplainValidationError("Field `concept` is required");
@@ -84,10 +87,19 @@ export function parseExplainRequest(body: unknown): GenerateAnalogyInput {
     );
   }
 
+  let resolvedLanguage: Language = "en";
+  if (language !== undefined) {
+    if (!isLanguage(language)) {
+      throw new ExplainValidationError('Field `language` must be "en" or "ar"');
+    }
+    resolvedLanguage = language;
+  }
+
   return {
     concept: concept.trim(),
     familiarTopics: topics,
     mode,
+    language: resolvedLanguage,
   };
 }
 

@@ -1,3 +1,6 @@
+"use client";
+
+import { useLanguage } from "@/lib/i18n";
 import { Button, Card } from "./ui";
 
 interface ExplanationEmptyStateProps {
@@ -7,19 +10,21 @@ interface ExplanationEmptyStateProps {
 
 /** Clean initial state when no explanation has been generated yet. */
 export function ExplanationEmptyState({
-  title = "Your explanation will appear here",
-  description = "Share what you want to learn and a familiar world you already know. We’ll craft an analogy that meets you there.",
+  title,
+  description,
 }: ExplanationEmptyStateProps) {
+  const { t } = useLanguage();
+
   return (
     <Card className="border border-dashed border-border/80 bg-surface/80 text-center shadow-none">
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
-        Ready when you are
+        {t("emptyEyebrow")}
       </p>
       <h2 className="mt-3 text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-        {title}
+        {title ?? t("emptyTitle")}
       </h2>
       <p className="mx-auto mt-3 max-w-md text-[15px] leading-relaxed text-muted">
-        {description}
+        {description ?? t("emptyDescription")}
       </p>
     </Card>
   );
@@ -32,9 +37,11 @@ interface ExplanationLoadingStateProps {
 
 /** Polished loading card while /api/explain is in flight. */
 export function ExplanationLoadingState({
-  message = "Crafting your analogy…",
-  detail = "We’re mapping the concept onto things you already understand. This usually takes a few seconds.",
+  message,
+  detail,
 }: ExplanationLoadingStateProps) {
+  const { t } = useLanguage();
+
   return (
     <Card
       className="flex flex-col gap-4"
@@ -48,13 +55,15 @@ export function ExplanationLoadingState({
           aria-hidden
         />
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
-          Creating explanation
+          {t("loadingEyebrow")}
         </p>
       </div>
       <h2 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-        {message}
+        {message ?? t("loadingCrafting")}
       </h2>
-      <p className="text-[15px] leading-relaxed text-muted">{detail}</p>
+      <p className="text-[15px] leading-relaxed text-muted">
+        {detail ?? t("loadingCraftingDetail")}
+      </p>
       <div className="space-y-2.5" aria-hidden>
         <div className="h-3 w-full rounded-full bg-input-bg" />
         <div className="h-3 w-11/12 rounded-full bg-input-bg" />
@@ -76,13 +85,15 @@ export function ExplanationErrorState({
   onRetry,
   isRetrying = false,
 }: ExplanationErrorStateProps) {
+  const { t } = useLanguage();
+
   return (
     <Card className="flex flex-col gap-4" role="alert">
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
-        Couldn’t create explanation
+        {t("errorEyebrow")}
       </p>
       <h2 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-        Let’s try that again
+        {t("errorTitle")}
       </h2>
       <p className="text-[15px] leading-relaxed text-muted">{message}</p>
       <div>
@@ -92,7 +103,7 @@ export function ExplanationErrorState({
           onClick={onRetry}
           disabled={isRetrying}
         >
-          {isRetrying ? "Retrying…" : "Try again"}
+          {isRetrying ? t("retrying") : t("retry")}
         </Button>
       </div>
     </Card>

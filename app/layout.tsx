@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
+import { Providers } from "@/components/Providers";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -22,9 +24,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
+      dir="ltr"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans">
+        <Script id="anuminate-language-init" strategy="beforeInteractive">
+          {`(function(){try{var l=localStorage.getItem("anuminate_language");if(l==="ar"){document.documentElement.lang="ar";document.documentElement.dir="rtl";}else if(l==="en"){document.documentElement.lang="en";document.documentElement.dir="ltr";}}catch(e){}})();`}
+        </Script>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

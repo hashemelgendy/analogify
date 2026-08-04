@@ -1,5 +1,9 @@
 /** Core domain model — shared by UI, API route, and AI service. */
 
+import type { Language } from "@/lib/i18n/types";
+
+export type { Language };
+
 export type ExplanationMode = "simpler" | "another" | "deeper";
 
 export type DifficultyLevel = "beginner" | "intermediate" | "advanced";
@@ -34,6 +38,8 @@ export interface ExplainRequest {
   familiarTopics: string[] | string;
   /** Optional refinement for mode buttons */
   mode?: ExplanationMode;
+  /** UI language — drives AI response language */
+  language?: Language;
 }
 
 /**
@@ -44,6 +50,8 @@ export interface GenerateAnalogyInput {
   concept: string;
   familiarTopics: string[];
   mode?: ExplanationMode;
+  /** Response language for generated content */
+  language?: Language;
 }
 
 /** Standard JSON envelope for /api/explain */
@@ -68,6 +76,19 @@ export interface LearningTrailItem {
 
 
 export type LearningTrailApiResponse = ApiResponse<LearningTrailItem[]>;
+
+/** Pagination meta for history / list endpoints (optional for trail callers). */
+export interface LearningTrailPagination {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  offset: number;
+}
+
+export type LearningTrailPageApiResponse = ApiResponse<LearningTrailItem[]> & {
+  pagination?: LearningTrailPagination;
+};
 
 export interface FormDefaults {
   concept: string;

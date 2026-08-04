@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DEFAULT_FORM_VALUES, SUGGESTED_TOPICS } from "@/data/mock";
+import { DEFAULT_FORM_VALUES } from "@/data/mock";
 import { toFriendlyExplainError } from "@/lib/client/explain-errors";
 import {
   parseFamiliarTopicsInput,
@@ -12,6 +12,7 @@ import {
   fetchLearningTrail,
 } from "@/lib/api/explanations";
 import { submitFeedbackRequest } from "@/lib/api/feedback";
+import { useLanguage } from "@/lib/i18n";
 import type {
   Explanation,
   ExplanationMode,
@@ -34,6 +35,7 @@ import { LearningTrail } from "./LearningTrail";
 const TRAIL_LIMIT = 10;
 
 export function HomePage() {
+  const { language, t } = useLanguage();
   const [concept, setConcept] = useState(DEFAULT_FORM_VALUES.concept);
   const [familiarTopicsInput, setFamiliarTopicsInput] = useState(
     DEFAULT_FORM_VALUES.familiarTopics,
@@ -58,6 +60,10 @@ export function HomePage() {
   );
 
   const inFlightRef = useRef(false);
+  /** Result panel target when opening a learning-trail entry from the landing page. */
+  const explanationRef = useRef<HTMLDivElement>(null);
+  /** Scroll only after trail open completes and the result container is painted. */
+  const shouldScrollToExplanationRef = useRef(false);
 
   const loadTrail = useCallback(async () => {
     setTrailLoading(true);
@@ -69,19 +75,36 @@ export function HomePage() {
     } catch (err) {
       console.error("[HomePage] learning trail failed:", err);
       setTrailError(
-        err instanceof Error
-          ? err.message
-          : "We couldn’t load your learning trail right now.",
+        err instanceof Error ? err.message : t("trailLoadFailed"),
       );
       setTrailItems([]);
     } finally {
       setTrailLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void loadTrail();
   }, [loadTrail]);
+
+  // Smooth-scroll to the explanation after a learning-trail click paints the result.
+  useEffect(() => {
+    if (!shouldScrollToExplanationRef.current) return;
+    if (isSelectingTrail) return;
+    if (!explanation) {
+      // Trail open failed and nothing to show — drop the pending scroll.
+      if (errorSource === "select") {
+        shouldScrollToExplanationRef.current = false;
+      }
+      return;
+    }
+
+    shouldScrollToExplanationRef.current = false;
+    explanationRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, [explanation, isSelectingTrail, errorSource]);
 
   async function createExplanation(mode: ExplanationMode = "another") {
     if (inFlightRef.current || isLoading || isSelectingTrail) return;
@@ -89,9 +112,7 @@ export function HomePage() {
 
     const familiarTopics = parseFamiliarTopicsInput(familiarTopicsInput);
     if (familiarTopics.length === 0) {
-      setError(
-        "Add at least one familiar topic so we can ground the analogy.",
-      );
+      setError(t("errorFamiliarRequired"));
       setErrorSource("generate");
       return;
     }
@@ -108,6 +129,7 @@ export function HomePage() {
         concept: concept.trim(),
         familiarTopics,
         mode,
+        language,
       });
       setExplanation(result);
       setError(null);
@@ -115,7 +137,7 @@ export function HomePage() {
       await loadTrail();
     } catch (err) {
       console.error("[HomePage] explain failed:", err);
-      setError(toFriendlyExplainError(err));
+      setError(toFriendlyExplainError(err, language));
       setErrorSource("generate");
     } finally {
       inFlightRef.current = false;
@@ -126,6 +148,7 @@ export function HomePage() {
   async function handleSelectTrailItem(item: LearningTrailItem) {
     if (isLoading || isSelectingTrail || inFlightRef.current) return;
 
+    shouldScrollToExplanationRef.current = true;
     setIsSelectingTrail(true);
     setError(null);
     setErrorSource(null);
@@ -136,15 +159,10 @@ export function HomePage() {
       // DB load only — never regenerates via OpenAI
       const full = await fetchExplanationById(item.id);
       setExplanation(full);
-      document
-        .getElementById("explanation-result")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (err) {
       console.error("[HomePage] trail select failed:", err);
       setError(
-        err instanceof Error
-          ? err.message
-          : "We couldn’t load that explanation right now.",
+        err instanceof Error ? err.message : t("trailOpenFailed"),
       );
       setErrorSource("select");
     } finally {
@@ -168,9 +186,7 @@ export function HomePage() {
 
   async function handleFeedback(payload: FeedbackPayload) {
     if (!payload.explanationId) {
-      setFeedbackError(
-        "This explanation was not saved, so feedback could not be linked. Create a new explanation to rate it.",
-      );
+      setFeedbackError(t("feedbackMissingId"));
       throw new Error("Missing explanation id");
     }
 
@@ -188,9 +204,7 @@ export function HomePage() {
       );
     } catch (err) {
       console.error("[HomePage] feedback save failed:", err);
-      setFeedbackError(
-        "We couldn’t save your feedback right now. Please try again.",
-      );
+      setFeedbackError(t("feedbackSaveFailed"));
       throw err;
     } finally {
       setIsSavingFeedback(false);
@@ -205,7 +219,7 @@ export function HomePage() {
   return (
     <div className="min-h-full cursor-default bg-background">
       <div className="mx-auto w-full max-w-2xl px-4 pb-16 pt-6 sm:px-6 sm:pt-8">
-        <Header />
+        <Header tagline={t("tagline")} />
 
         <main className="mt-12 flex flex-col gap-8 sm:mt-16 sm:gap-10">
           <Hero />
@@ -213,7 +227,6 @@ export function HomePage() {
           <InputCard
             concept={concept}
             familiarTopics={familiarTopicsInput}
-            suggestedTopics={SUGGESTED_TOPICS}
             onConceptChange={setConcept}
             onFamiliarTopicsChange={setFamiliarTopicsInput}
             onSubmit={() => {
@@ -228,13 +241,13 @@ export function HomePage() {
             <ExplanationLoadingState
               message={
                 isSelectingTrail
-                  ? "Opening saved explanation…"
-                  : "Crafting your analogy…"
+                  ? t("loadingOpening")
+                  : t("loadingCrafting")
               }
               detail={
                 isSelectingTrail
-                  ? "Loading the full analogy from your learning trail."
-                  : "We’re mapping the concept onto things you already understand. This usually takes a few seconds."
+                  ? t("loadingOpeningDetail")
+                  : t("loadingCraftingDetail")
               }
             />
           ) : null}
@@ -248,7 +261,11 @@ export function HomePage() {
           ) : null}
 
           {showResult && explanation ? (
-            <div id="explanation-result" className="flex flex-col gap-8">
+            <div
+              ref={explanationRef}
+              id="explanation-result"
+              className="flex flex-col gap-8"
+            >
               <ExplanationCard
                 data={explanation}
                 isLoading={isLoading}

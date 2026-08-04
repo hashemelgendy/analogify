@@ -1,3 +1,4 @@
+import { shouldApplyRateLimit } from "@/lib/env";
 import { getClientIp } from "@/lib/rate-limit/ip";
 import type { RateLimitResult } from "@/lib/rate-limit/config";
 import { EXPLAIN_RATE_LIMIT } from "@/lib/rate-limit/config";
@@ -48,14 +49,36 @@ async function resolveRateLimitIdentity(
   }
 }
 
+/** Allow-all result when rate limiting is disabled (non-production). */
+function rateLimitBypassResult(): RateLimitResult & {
+  backend: "upstash" | "memory";
+} {
+  return {
+    success: true,
+    limit: EXPLAIN_RATE_LIMIT.max,
+    remaining: EXPLAIN_RATE_LIMIT.max,
+    reset: Date.now() + EXPLAIN_RATE_LIMIT.windowMs,
+    retryAfterSeconds: 0,
+    subject: "guest",
+    keyLabel: "bypass:non-production",
+    backend: "memory",
+  };
+}
+
 /**
  * Rate-limit POST /api/explain for the current guest (or IP).
  * MVP storage: in-memory sliding window of timestamps.
  * Optional: Upstash when REST credentials are set (distributed).
+ *
+ * Skipped entirely when APP_ENV is not production (see shouldApplyRateLimit).
  */
 export async function rateLimitExplain(
   request: Request,
 ): Promise<RateLimitResult & { backend: "upstash" | "memory" }> {
+  if (!shouldApplyRateLimit()) {
+    return rateLimitBypassResult();
+  }
+
   const identity = await resolveRateLimitIdentity(request);
   const meta = {
     subject: identity.subject,

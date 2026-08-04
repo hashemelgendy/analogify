@@ -1,10 +1,16 @@
 import OpenAI from "openai";
 import { EXPLANATION_VARIANTS, SAMPLE_EXPLANATIONS } from "@/data/mock";
+import {
+  buildInDepthSystemPrompt,
+  buildInDepthUserPrompt,
+} from "@/lib/ai/in-depth-prompt";
+import { buildMockInDepthBody } from "@/lib/explanation-sections";
 import type {
   DifficultyLevel,
   Explanation,
   ExplanationMode,
   GenerateAnalogyInput,
+  Language,
 } from "@/types/explanation";
 
 /**
@@ -14,9 +20,29 @@ import type {
  *   explain-service → generateAnalogyExplanation() → OpenAI (or mock fallback)
  *
  * Keep the function signature and Explanation return type stable.
+ * Mode "deeper" uses the In-Depth Analogy prompt (structured markers).
  */
 
-const SYSTEM_PROMPT = `You are Anuminate, an AI tutor that helps people understand difficult concepts by creating personalized analogies.
+function buildSystemPrompt(language: Language, mode: ExplanationMode): string {
+  if (mode === "deeper") {
+    return buildInDepthSystemPrompt(language);
+  }
+
+  const languageBlock =
+    language === "ar"
+      ? `LANGUAGE (critical):
+- Write ALL user-facing string fields in natural, modern Arabic (Modern Standard Arabic that is clear and readable).
+- Fields that must be in Arabic: analogyTitle, analogyContent, explanation, keyPoints.
+- Keep difficultyLevel as the English enum values only (beginner | intermediate | advanced).
+- concept and familiarTopics: echo the learner's input (may be Arabic or English) without translating unless needed for clarity.
+- Use correct Arabic punctuation and flowing sentences — avoid broken machine-translated tone.`
+      : `LANGUAGE:
+- Write ALL user-facing string fields in clear, natural English.
+- Fields: analogyTitle, analogyContent, explanation, keyPoints.
+- Keep difficultyLevel as beginner | intermediate | advanced.
+- concept and familiarTopics: echo the learner's input.`;
+
+  return `You are Anuminate, an AI tutor that helps people understand difficult concepts by creating personalized analogies.
 
 The analogy should:
 - Use concepts the learner already understands
@@ -24,6 +50,8 @@ The analogy should:
 - Explain the mapping between the analogy and the real concept
 - Avoid oversimplifying important details
 - Be clear, memorable, and educational
+
+${languageBlock}
 
 You must respond with a single valid JSON object only (no markdown fences, no commentary) using exactly this shape:
 {
@@ -35,6 +63,7 @@ You must respond with a single valid JSON object only (no markdown fences, no co
   "keyPoints": string[],
   "difficultyLevel": "beginner" | "intermediate" | "advanced"
 }`;
+}
 
 const DIFFICULTY_LEVELS = new Set<DifficultyLevel>([
   "beginner",
@@ -65,7 +94,8 @@ function buildModeInstruction(mode: ExplanationMode): string {
     case "simpler":
       return "Make the analogy simpler and more beginner-friendly. Prefer difficultyLevel \"beginner\".";
     case "deeper":
-      return "Go deeper: richer mapping, more precise technical correspondence. Prefer difficultyLevel \"advanced\".";
+      // Full instructions live in the In-Depth system prompt when mode is deeper
+      return "Mode: In-Depth Analogy — follow the structured marker format exactly.";
     case "another":
     default:
       return "Provide a strong, fresh alternative analogy at an intermediate depth. Prefer difficultyLevel \"intermediate\".";
@@ -76,18 +106,29 @@ function buildUserPrompt(input: {
   concept: string;
   familiarTopics: string[];
   mode: ExplanationMode;
+  language: Language;
 }): string {
+  if (input.mode === "deeper") {
+    return buildInDepthUserPrompt(input);
+  }
+
+  const outputLang =
+    input.language === "ar"
+      ? "Arabic (natural Modern Standard Arabic)"
+      : "English";
+
   return [
     `Concept to explain: ${input.concept}`,
     `Familiar topics the learner already understands: ${input.familiarTopics.join(", ")}`,
+    `Output language: ${outputLang}`,
     buildModeInstruction(input.mode),
     "",
     "Requirements:",
     "- Ground the analogy in one or more of the familiar topics.",
-    "- analogyTitle: a short memorable line (e.g. \"Think of X like Y.\").",
-    "- analogyContent: the core analogy (2–4 sentences).",
-    "- explanation: how the analogy maps back to the real concept.",
-    "- keyPoints: 3–5 concise bullet-worthy takeaways as strings.",
+    `- analogyTitle: a short memorable line in ${outputLang}.`,
+    `- analogyContent: the core analogy (2–4 sentences) in ${outputLang}.`,
+    `- explanation: how the analogy maps back to the real concept, in ${outputLang}.`,
+    `- keyPoints: 3–5 concise bullet-worthy takeaways as strings in ${outputLang}.`,
     "- Set concept and familiarTopics to match the request (use the same familiar topics list).",
     "- difficultyLevel must be exactly beginner, intermediate, or advanced.",
   ].join("\n");
@@ -208,38 +249,99 @@ function generateMockAnalogyExplanation(input: {
   concept: string;
   familiarTopics: string[];
   mode: ExplanationMode;
+  language: Language;
 }): Explanation {
-  const { concept, familiarTopics, mode } = input;
-  const primaryFamiliar = familiarTopics[0] ?? "something familiar";
+  const { concept, familiarTopics, mode, language } = input;
+  const primaryFamiliar =
+    familiarTopics[0] ??
+    (language === "ar" ? "شيء مألوف" : "something familiar");
   const label = conceptLabel(concept);
 
-  const catalogue = findCatalogueMatch(concept, familiarTopics);
+  // English catalogue samples only when mocking English
+  if (language === "en") {
+    const catalogue = findCatalogueMatch(concept, familiarTopics);
 
-  if (catalogue && mode === "another") {
-    return withTimestamp({
-      ...catalogue,
-      concept,
-      familiarTopics:
-        familiarTopics.length > 0 ? familiarTopics : catalogue.familiarTopics,
-    });
-  }
-
-  if (catalogue && mode !== "another") {
-    const variants = EXPLANATION_VARIANTS[mode];
-    const isBlockchainSample = catalogue.concept
-      .toLowerCase()
-      .includes("blockchain");
-
-    if (isBlockchainSample) {
+    if (catalogue && mode === "another") {
       return withTimestamp({
+        ...catalogue,
         concept,
         familiarTopics:
-          familiarTopics.length > 0
-            ? familiarTopics
-            : catalogue.familiarTopics,
-        ...variants,
+          familiarTopics.length > 0 ? familiarTopics : catalogue.familiarTopics,
       });
     }
+
+    if (catalogue && mode !== "another") {
+      const variants = EXPLANATION_VARIANTS[mode];
+      const isBlockchainSample = catalogue.concept
+        .toLowerCase()
+        .includes("blockchain");
+
+      if (isBlockchainSample) {
+        return withTimestamp({
+          concept,
+          familiarTopics:
+            familiarTopics.length > 0
+              ? familiarTopics
+              : catalogue.familiarTopics,
+          ...variants,
+        });
+      }
+    }
+  }
+
+  if (language === "ar") {
+    const genericAr: Record<
+      ExplanationMode,
+      Pick<
+        Explanation,
+        | "analogyTitle"
+        | "analogyContent"
+        | "explanation"
+        | "keyPoints"
+        | "difficultyLevel"
+      >
+    > = {
+      simpler: {
+        analogyTitle: `تخيّل «${label}» مثل ${primaryFamiliar}.`,
+        analogyContent: `تصوّر الأجزاء الصعبة من «${label}» كلحظات بسيطة من عالم ${primaryFamiliar} التي تثق بها بالفعل.`,
+        explanation: `باختصار: يعمل «${label}» بإعادة استخدام أنماط تعرفها من ${primaryFamiliar}. ركّز على الفكرة المشتركة، لا على المصطلحات.`,
+        keyPoints: [
+          `اربط «${label}» بلحظة مألوفة من ${primaryFamiliar}`,
+          "تجاهل المصطلحات حتى تتضح الفكرة الأساسية",
+          "تشبيه واحد واضح يكفي للبداية",
+        ],
+        difficultyLevel: "beginner",
+      },
+      another: {
+        analogyTitle: `فكّر في «${label}» مثل ${primaryFamiliar}.`,
+        analogyContent: `في ${primaryFamiliar} يبدو التقدّم طبيعيًا لأن كل خطوة تعتمد على السابقة. «${label}» يتبع سلسلة مشابهة من خطوات صغيرة يمكن التحقق منها.`,
+        explanation: `قد يبدو «${label}» مجرّدًا حتى تربطه بـ ${primaryFamiliar}. عندما يتضح التشبيه، يصبح التعريف الرسمي أسهل للاستيعاب.`,
+        keyPoints: [
+          `${primaryFamiliar} يزوّدك بالنموذج الذهني`,
+          `«${label}» يعكس هذا الهيكل التدريجي`,
+          "المصطلحات الرسمية تلتصق بسهولة بعد ثبات التشبيه",
+        ],
+        difficultyLevel: "intermediate",
+      },
+      deeper: {
+        analogyTitle: `فكّر في «${label}» مثل ${primaryFamiliar}:`,
+        analogyContent: buildMockInDepthBody(label, primaryFamiliar, "ar"),
+        explanation: `إجمالًا، «${label}» يشبه ${primaryFamiliar}: أدوار واضحة، مراحل متتابعة، وقيود حقيقية.`,
+        keyPoints: [
+          "خريطة أدوار واضحة بين المفهوم والتشبيه",
+          "رحلة على مراحل يمكن متابعتها",
+          "قيود واقعية تحافظ على صدق التشبيه",
+        ],
+        difficultyLevel: "advanced",
+      },
+    };
+
+    return withTimestamp({
+      concept,
+      familiarTopics:
+        familiarTopics.length > 0 ? familiarTopics : [primaryFamiliar],
+      ...genericAr[mode],
+    });
   }
 
   const generic: Record<
@@ -276,13 +378,13 @@ function generateMockAnalogyExplanation(input: {
       difficultyLevel: "intermediate",
     },
     deeper: {
-      analogyTitle: `A deeper look: ${label.toLowerCase()} through ${primaryFamiliar}.`,
-      analogyContent: `Go further in the ${primaryFamiliar} metaphor: each rule, edge case, and shared convention has a parallel inside how ${label.toLowerCase()} actually works.`,
-      explanation: `Under the hood, ${label} adds structure, constraints, and shared agreement—much like refining expertise in ${primaryFamiliar} beyond the first mental model.`,
+      analogyTitle: `Think of ${label.toLowerCase()} like ${primaryFamiliar}:`,
+      analogyContent: buildMockInDepthBody(label, primaryFamiliar, "en"),
+      explanation: `Overall, ${label} works like ${primaryFamiliar}: clear roles, sequenced stages, and realistic constraints that keep the analogy coherent.`,
       keyPoints: [
-        "Push the metaphor into rules and edge cases",
-        "Connect constraints in both domains",
-        "Treat the analogy as a scaffold, not a perfect map",
+        "Clear role mapping between concept and domain",
+        "A staged journey you can follow step by step",
+        "Real constraints keep the analogy honest",
       ],
       difficultyLevel: "advanced",
     },
@@ -300,6 +402,7 @@ async function callOpenAI(input: {
   concept: string;
   familiarTopics: string[];
   mode: ExplanationMode;
+  language: Language;
 }): Promise<Explanation> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -314,7 +417,7 @@ async function callOpenAI(input: {
     temperature: 0.7,
     response_format: { type: "json_object" },
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: buildSystemPrompt(input.language, input.mode) },
       {
         role: "user",
         content: buildUserPrompt(input),
@@ -345,7 +448,8 @@ export async function generateAnalogyExplanation(
     .map((t) => t.trim())
     .filter(Boolean);
   const mode: ExplanationMode = input.mode ?? "another";
-  const normalized = { concept, familiarTopics, mode };
+  const language: Language = input.language ?? "en";
+  const normalized = { concept, familiarTopics, mode, language };
 
   if (!process.env.OPENAI_API_KEY) {
     console.warn(

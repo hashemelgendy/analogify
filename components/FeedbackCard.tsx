@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Card, Input } from "./ui";
+import { useLanguage } from "@/lib/i18n";
 import type { FeedbackPayload, FeedbackRating } from "@/types/explanation";
+import { Button, Card, Input } from "./ui";
 
 interface FeedbackCardProps {
   concept?: string;
@@ -41,12 +42,13 @@ function StarIcon({ filled }: { filled: boolean }) {
 export function FeedbackCard({
   concept = "",
   explanationId,
-  title = "Did this explanation help you understand?",
-  subtitle = "Your feedback helps Anuminate learn how you learn.",
-  commentPlaceholder = "Anything to improve? (optional)",
+  title,
+  subtitle,
+  commentPlaceholder,
   disabled = false,
   onSubmit,
 }: FeedbackCardProps) {
+  const { t } = useLanguage();
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState("");
@@ -66,7 +68,7 @@ export function FeedbackCard({
     if (locked) return;
 
     if (rating < 1) {
-      setValidationError("Please select a star rating before submitting.");
+      setValidationError(t("feedbackValidationRating"));
       return;
     }
 
@@ -92,9 +94,11 @@ export function FeedbackCard({
     <Card className="flex flex-col gap-4">
       <div className="cursor-default">
         <h3 className="text-lg font-bold tracking-tight text-foreground">
-          {title}
+          {title ?? t("feedbackTitle")}
         </h3>
-        <p className="mt-1 text-sm text-muted">{subtitle}</p>
+        <p className="mt-1 text-sm text-muted">
+          {subtitle ?? t("feedbackSubtitle")}
+        </p>
       </div>
 
       <div
@@ -110,7 +114,7 @@ export function FeedbackCard({
               type="button"
               role="radio"
               aria-checked={rating === value}
-              aria-label={`${value} star${value === 1 ? "" : "s"}`}
+              aria-label={`${value}`}
               disabled={locked}
               onMouseEnter={() => {
                 if (!locked) setHoverRating(value);
@@ -133,8 +137,8 @@ export function FeedbackCard({
         id="feedback-comment"
         value={comment}
         onChange={(event) => setComment(event.target.value)}
-        placeholder={commentPlaceholder}
-        aria-label="Optional feedback"
+        placeholder={commentPlaceholder ?? t("feedbackPlaceholder")}
+        aria-label={t("feedbackPlaceholder")}
         disabled={locked}
       />
 
@@ -146,7 +150,7 @@ export function FeedbackCard({
 
       {isSubmitted ? (
         <p className="text-sm font-medium text-primary" role="status">
-          Thanks — your feedback was submitted.
+          {t("feedbackThanks")}
         </p>
       ) : (
         <div>
@@ -158,7 +162,7 @@ export function FeedbackCard({
             }}
             disabled={locked}
           >
-            {isSubmitting ? "Submitting…" : "Submit Feedback"}
+            {isSubmitting ? t("feedbackSubmitting") : t("feedbackSubmit")}
           </Button>
         </div>
       )}
