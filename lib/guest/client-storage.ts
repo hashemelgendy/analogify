@@ -49,6 +49,8 @@ export function markGuestMergedForUser(userId: string): void {
 
 /** Soft-prompt: generations this guest session (not persisted long-term required). */
 export const LOCAL_GENERATION_COUNT_KEY = "anuminate_generation_count";
+/** User closed the "sign in to save" popup — do not re-show this session/browser. */
+export const LOCAL_SAVE_PROMPT_DISMISSED_KEY = "anuminate_save_prompt_dismissed";
 
 export function readGenerationCount(): number {
   if (typeof window === "undefined") return 0;
@@ -68,5 +70,23 @@ export function incrementGenerationCount(): number {
     return next;
   } catch {
     return 0;
+  }
+}
+
+export function isSavePromptDismissed(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return localStorage.getItem(LOCAL_SAVE_PROMPT_DISMISSED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function markSavePromptDismissed(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(LOCAL_SAVE_PROMPT_DISMISSED_KEY, "true");
+  } catch {
+    // ignore
   }
 }

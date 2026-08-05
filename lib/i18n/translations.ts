@@ -164,8 +164,10 @@ const en = {
   authSignInFailed: "Sign-in failed. Please try again.",
   authSignOutFailed: "Sign-out failed. Please try again.",
   authSaveHelper: "Sign in to save your explanations",
+  authSavePromptTitle: "Keep your explanations",
   authSavePrompt:
     "Sign in to save your explanations permanently across devices.",
+  authSavePromptDismiss: "Not now",
 
   // Client error messages
   errNetwork:
@@ -327,7 +329,9 @@ const ar: { [K in TranslationKey]: string } = {
   authSignInFailed: "فشل تسجيل الدخول. حاول مرة أخرى.",
   authSignOutFailed: "فشل تسجيل الخروج. حاول مرة أخرى.",
   authSaveHelper: "سجّل الدخول لحفظ شروحاتك",
+  authSavePromptTitle: "احفظ شروحاتك",
   authSavePrompt: "سجّل الدخول لحفظ شروحاتك بشكل دائم عبر أجهزتك.",
+  authSavePromptDismiss: "ليس الآن",
 
   errNetwork: "تعذر الوصول إلى أنومنيت. تحقق من اتصالك وحاول مرة أخرى.",
   errRateLimit:

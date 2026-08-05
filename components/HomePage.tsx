@@ -381,8 +381,6 @@ export function HomePage() {
                 isLoading={isLoading || isSelectingTrail}
               />
 
-              <SaveExplanationsPrompt generationCount={generationCount} />
-
               {showEmpty ? <ExplanationEmptyState /> : null}
 
               {showLoading ? (
@@ -460,6 +458,8 @@ export function HomePage() {
           void confirmDelete();
         }}
       />
+
+      <SaveExplanationsPrompt generationCount={generationCount} />
     </div>
   );
 }
