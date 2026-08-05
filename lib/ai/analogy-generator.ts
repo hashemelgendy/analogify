@@ -4,6 +4,15 @@ import {
   buildInDepthSystemPrompt,
   buildInDepthUserPrompt,
 } from "@/lib/ai/in-depth-prompt";
+import {
+  buildFallbackSimplifyGuidance,
+  buildRegenerationFixBlock,
+  explanationDepthFromMode,
+  maxQualityRegenerations,
+  qualityCheckExplanation,
+  toQualityCheckInput,
+  type QualityCheckResult,
+} from "@/lib/ai/quality-check";
 import { buildMockInDepthBody } from "@/lib/explanation-sections";
 import type {
   DifficultyLevel,
@@ -17,7 +26,8 @@ import type {
  * AI generation layer — sole place that talks to OpenAI.
  *
  * Flow:
- *   explain-service → generateAnalogyExplanation() → OpenAI (or mock fallback)
+ *   explain-service → generateAnalogyExplanation()
+ *     → OpenAI generation (+ depth-aware quality check / regen)
  *
  * Keep the function signature and Explanation return type stable.
  * Mode "deeper" uses the In-Depth Analogy prompt (structured markers).
@@ -107,31 +117,38 @@ function buildUserPrompt(input: {
   familiarTopics: string[];
   mode: ExplanationMode;
   language: Language;
+  qualityFix?: string;
 }): string {
+  let base: string;
   if (input.mode === "deeper") {
-    return buildInDepthUserPrompt(input);
+    base = buildInDepthUserPrompt(input);
+  } else {
+    const outputLang =
+      input.language === "ar"
+        ? "Arabic (natural Modern Standard Arabic)"
+        : "English";
+
+    base = [
+      `Concept to explain: ${input.concept}`,
+      `Familiar topics the learner already understands: ${input.familiarTopics.join(", ")}`,
+      `Output language: ${outputLang}`,
+      buildModeInstruction(input.mode),
+      "",
+      "Requirements:",
+      "- Ground the analogy in one or more of the familiar topics.",
+      `- analogyTitle: a short memorable line in ${outputLang}.`,
+      `- analogyContent: the core analogy (2–4 sentences) in ${outputLang}.`,
+      `- explanation: how the analogy maps back to the real concept, in ${outputLang}.`,
+      `- keyPoints: 3–5 concise bullet-worthy takeaways as strings in ${outputLang}.`,
+      "- Set concept and familiarTopics to match the request (use the same familiar topics list).",
+      "- difficultyLevel must be exactly beginner, intermediate, or advanced.",
+    ].join("\n");
   }
 
-  const outputLang =
-    input.language === "ar"
-      ? "Arabic (natural Modern Standard Arabic)"
-      : "English";
-
-  return [
-    `Concept to explain: ${input.concept}`,
-    `Familiar topics the learner already understands: ${input.familiarTopics.join(", ")}`,
-    `Output language: ${outputLang}`,
-    buildModeInstruction(input.mode),
-    "",
-    "Requirements:",
-    "- Ground the analogy in one or more of the familiar topics.",
-    `- analogyTitle: a short memorable line in ${outputLang}.`,
-    `- analogyContent: the core analogy (2–4 sentences) in ${outputLang}.`,
-    `- explanation: how the analogy maps back to the real concept, in ${outputLang}.`,
-    `- keyPoints: 3–5 concise bullet-worthy takeaways as strings in ${outputLang}.`,
-    "- Set concept and familiarTopics to match the request (use the same familiar topics list).",
-    "- difficultyLevel must be exactly beginner, intermediate, or advanced.",
-  ].join("\n");
+  if (input.qualityFix?.trim()) {
+    return `${base}\n\n---\n${input.qualityFix.trim()}`;
+  }
+  return base;
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -403,6 +420,9 @@ async function callOpenAI(input: {
   familiarTopics: string[];
   mode: ExplanationMode;
   language: Language;
+  qualityFix?: string;
+  /** Override generation model (e.g. stronger for in-depth) */
+  modelOverride?: string;
 }): Promise<Explanation> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -410,7 +430,10 @@ async function callOpenAI(input: {
   }
 
   const client = new OpenAI({ apiKey });
-  const model = process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
+  const model =
+    input.modelOverride?.trim() ||
+    process.env.OPENAI_MODEL?.trim() ||
+    "gpt-4o-mini";
 
   const completion = await client.chat.completions.create({
     model,
@@ -436,8 +459,142 @@ async function callOpenAI(input: {
   });
 }
 
+function generationModelForMode(mode: ExplanationMode): string | undefined {
+  if (mode === "deeper") {
+    return (
+      process.env.OPENAI_MODEL_IN_DEPTH?.trim() ||
+      process.env.OPENAI_MODEL_QUALITY_STRONG?.trim() ||
+      process.env.OPENAI_MODEL?.trim() ||
+      undefined
+    );
+  }
+  return process.env.OPENAI_MODEL?.trim() || undefined;
+}
+
+async function runQualityLoop(input: {
+  concept: string;
+  familiarTopics: string[];
+  mode: ExplanationMode;
+  language: Language;
+}): Promise<Explanation> {
+  const depth = explanationDepthFromMode(input.mode);
+  const analogyDomain =
+    input.familiarTopics[0]?.trim() || input.familiarTopics.join(", ");
+  const modelOverride = generationModelForMode(input.mode);
+  const maxRegen = maxQualityRegenerations(depth);
+
+  let explanation = await callOpenAI({
+    ...input,
+    modelOverride,
+  });
+  let lastCheck: QualityCheckResult | null = null;
+
+  for (let attempt = 0; attempt <= maxRegen; attempt++) {
+    lastCheck = await qualityCheckExplanation(
+      toQualityCheckInput(
+        input.concept,
+        analogyDomain,
+        explanation,
+        depth,
+      ),
+    );
+
+    if (lastCheck.pass) {
+      console.info("[analogy-generator] quality pass", {
+        depth,
+        attempt: attempt + 1,
+        score: lastCheck.score,
+      });
+      return explanation;
+    }
+
+    if (attempt >= maxRegen) break;
+
+    const qualityFix = buildRegenerationFixBlock(depth, lastCheck);
+    console.info("[analogy-generator] quality fail — regenerating", {
+      depth,
+      attempt: attempt + 1,
+      score: lastCheck.score,
+      issues: lastCheck.issues,
+    });
+
+    explanation = await callOpenAI({
+      ...input,
+      modelOverride,
+      qualityFix,
+    });
+  }
+
+  // Hard-fail fallback by depth
+  console.warn("[analogy-generator] quality still failing after retries", {
+    depth,
+    score: lastCheck?.score,
+    issues: lastCheck?.issues,
+  });
+
+  if (depth === "simplified") {
+    // Low risk: return last attempt anyway
+    return explanation;
+  }
+
+  if (depth === "normal") {
+    try {
+      return await callOpenAI({
+        ...input,
+        modelOverride,
+        qualityFix: buildFallbackSimplifyGuidance(),
+      });
+    } catch {
+      return explanation;
+    }
+  }
+
+  // in_depth → downgrade generation rigor to normal-quality intermediate explanation
+  try {
+    console.info(
+      "[analogy-generator] downgrading in_depth to normal-style generation after quality fail",
+    );
+    const downgraded = await callOpenAI({
+      concept: input.concept,
+      familiarTopics: input.familiarTopics,
+      language: input.language,
+      mode: "another",
+      modelOverride: process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini",
+      qualityFix: [
+        "The in-depth attempt failed strict review.",
+        "Produce a solid intermediate (normal depth) analogy that is clear and accurate,",
+        "even if less exhaustive than a full in-depth map.",
+        lastCheck?.fix_suggestion
+          ? `Also address: ${lastCheck.fix_suggestion}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    });
+    // One light check only — prefer returning something solid over blocking
+    const light = await qualityCheckExplanation(
+      toQualityCheckInput(
+        input.concept,
+        analogyDomain,
+        downgraded,
+        "normal",
+      ),
+    );
+    if (light.pass || light.score >= 5) {
+      return {
+        ...downgraded,
+        difficultyLevel: downgraded.difficultyLevel,
+      };
+    }
+    return downgraded;
+  } catch {
+    return explanation;
+  }
+}
+
 /**
  * Generates an analogy-based explanation for a concept via OpenAI.
+ * Runs depth-aware quality checks (regenerate / fallback) when OpenAI is enabled.
  * Falls back to mock data if the key is missing, the API fails, or JSON is invalid.
  */
 export async function generateAnalogyExplanation(
@@ -459,7 +616,7 @@ export async function generateAnalogyExplanation(
   }
 
   try {
-    return await callOpenAI(normalized);
+    return await runQualityLoop(normalized);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown OpenAI error";
