@@ -6,6 +6,12 @@ export type { Language };
 
 export type ExplanationMode = "simpler" | "another" | "deeper";
 
+/**
+ * UI-facing depth labels derived from generationMode.
+ * simplified ← simpler, normal ← another (default), in_depth ← deeper
+ */
+export type ExplanationDepth = "simplified" | "normal" | "in_depth";
+
 export type DifficultyLevel = "beginner" | "intermediate" | "advanced";
 
 export type LearningTrailIcon = "heart" | "trend";
@@ -67,11 +73,18 @@ export interface LearningTrailItem {
   id: string;
   label: string;
   icon: LearningTrailIcon;
+  /** What the user wanted to learn */
   concept: string;
+  /** Primary analogy / familiar world (e.g. first familiar topic) */
+  analogy?: string;
+  /** Explanation depth (defaults to normal when missing) */
+  depth?: ExplanationDepth;
   familiarTopics: string[];
   createdAt?: string;
   /** Short list preview (e.g. analogy title) */
   preview?: string;
+  /** How it was generated — source for depth when present */
+  generationMode?: ExplanationMode;
 }
 
 

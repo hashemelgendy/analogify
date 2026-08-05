@@ -11,6 +11,7 @@ import {
   restoreExplanationById,
 } from "@/lib/api/explanations";
 import type { Explanation, LearningTrailItem } from "@/types/explanation";
+import { generationModeToDepth } from "@/lib/history/display";
 
 export const HISTORY_PAGE_SIZE = 5;
 
@@ -19,13 +20,21 @@ export function explanationToTrailItem(
   index = 0,
 ): LearningTrailItem | null {
   if (!explanation.id) return null;
+  const analogy =
+    explanation.familiarTopics.find((t) => t.trim())?.trim() || undefined;
+  const generationMode = explanation.generationMode ?? "another";
   return {
     id: explanation.id,
     concept: explanation.concept,
+    analogy,
+    depth: generationModeToDepth(generationMode),
+    generationMode,
     familiarTopics: explanation.familiarTopics,
     createdAt: explanation.createdAt ?? new Date().toISOString(),
     preview: explanation.analogyTitle,
-    label: explanation.concept,
+    label: analogy
+      ? `${explanation.concept} — ${analogy}`
+      : explanation.concept,
     icon: index % 2 === 0 ? "heart" : "trend",
   };
 }

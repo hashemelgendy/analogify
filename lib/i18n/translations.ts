@@ -107,6 +107,11 @@ const en = {
   sidebarLoadingMore: "Loading more…",
   sidebarEnd: "You're all caught up",
 
+  // Depth labels (history sidebar)
+  depthSimplified: "Simplified",
+  depthNormal: "Normal",
+  depthInDepth: "In-Depth",
+
   // History page
   historyNewExplanation: "← New explanation",
   historyEyebrow: "Your learning trail",
@@ -276,6 +281,10 @@ const ar: { [K in TranslationKey]: string } = {
   sidebarItemMenu: "خيارات الشرح",
   sidebarLoadingMore: "جارٍ تحميل المزيد…",
   sidebarEnd: "وصلت للنهاية",
+
+  depthSimplified: "مبسّط",
+  depthNormal: "عادي",
+  depthInDepth: "متعمّق",
 
   historyNewExplanation: "شرح جديد →",
   historyEyebrow: "مسار تعلّمك",

@@ -10,6 +10,7 @@ import type {
   LearningTrailIcon,
   LearningTrailItem,
 } from "@/types/explanation";
+import { generationModeToDepth } from "@/lib/history/display";
 
 export type PersistExplanationInput = {
   input: GenerateAnalogyInput;
@@ -71,21 +72,28 @@ export function trailItemFromRow(
   row: ExplanationRow,
   index: number,
 ): LearningTrailItem {
-  const familiar = row.familiar_topics[0] ?? "familiar worlds";
+  const analogy = row.familiar_topics.find((t) => t.trim())?.trim() ?? "";
   const icon: LearningTrailIcon = index % 2 === 0 ? "heart" : "trend";
   const preview =
     row.analogy_title.trim() ||
     (row.analogy_content.length > 140
       ? `${row.analogy_content.slice(0, 140).trim()}…`
       : row.analogy_content);
+  const generationMode = row.generation_mode as ExplanationMode;
+  const depth = generationModeToDepth(generationMode);
 
   return {
     id: row.id,
-    // UI formats "through" with i18n; keep a plain English fallback for API/debug only.
-    label: `${row.concept} — through ${familiar}`,
+    // UI composes display labels; keep a plain fallback for API/debug only.
+    label: analogy
+      ? `${row.concept} — ${analogy}`
+      : row.concept,
     icon,
     concept: row.concept,
+    analogy: analogy || undefined,
+    depth,
     familiarTopics: row.familiar_topics,
+    generationMode,
     createdAt: row.created_at,
     preview,
   };

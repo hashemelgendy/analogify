@@ -1,8 +1,14 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import {
+  formatTrailCollapsedChip,
+  formatTrailCollapsedTitle,
+  formatTrailSecondaryLine,
+  resolveTrailDepth,
+} from "@/lib/history/display";
 import { useLanguage } from "@/lib/i18n";
-import type { LearningTrailItem } from "@/types/explanation";
+import type { ExplanationDepth, LearningTrailItem } from "@/types/explanation";
 
 type HistorySidebarItemProps = {
   item: LearningTrailItem;
@@ -13,28 +19,29 @@ type HistorySidebarItemProps = {
   onDelete: (item: LearningTrailItem) => void;
 };
 
-function formatTime(
-  value: string | undefined,
-  unknownLabel: string,
-  language: string,
-): string {
-  if (!value) return unknownLabel;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return unknownLabel;
-  return date.toLocaleDateString(language === "ar" ? "ar" : "en", {
-    month: "short",
-    day: "numeric",
-  });
-}
-
 function truncate(text: string, max = 48): string {
   const t = text.trim();
   if (t.length <= max) return t;
   return `${t.slice(0, max - 1).trim()}…`;
 }
 
+function depthLabel(
+  depth: ExplanationDepth,
+  t: (key: "depthSimplified" | "depthNormal" | "depthInDepth") => string,
+): string {
+  switch (depth) {
+    case "simplified":
+      return t("depthSimplified");
+    case "in_depth":
+      return t("depthInDepth");
+    case "normal":
+    default:
+      return t("depthNormal");
+  }
+}
+
 /**
- * Single sidebar history row with kebab menu (delete).
+ * Single sidebar history row with concept / analogy / depth + kebab menu.
  */
 export function HistorySidebarItem({
   item,
@@ -44,7 +51,7 @@ export function HistorySidebarItem({
   onSelect,
   onDelete,
 }: HistorySidebarItemProps) {
-  const { language, t } = useLanguage();
+  const { t } = useLanguage();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
@@ -70,24 +77,33 @@ export function HistorySidebarItem({
     };
   }, [menuOpen]);
 
-  const title = truncate(item.concept || item.label || t("historyNoExplanations"));
-  const time = formatTime(item.createdAt, t("historyUnknownDate"), language);
+  const depth = resolveTrailDepth(item);
+  const depthText = depthLabel(depth, t);
+  const concept = truncate(
+    item.concept || item.label || t("historyNoExplanations"),
+    52,
+  );
+  const secondary = truncate(formatTrailSecondaryLine(item, depthText), 56);
+  const fullTitle = formatTrailCollapsedTitle(item, depthText);
+  const collapsedChip = truncate(formatTrailCollapsedChip(item), 10);
 
   if (collapsed) {
     return (
       <button
         type="button"
-        title={title}
+        title={fullTitle}
+        aria-label={fullTitle}
         aria-current={active ? "true" : undefined}
         disabled={deleting}
         onClick={() => onSelect(item)}
-        className={`mx-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+        className={`mx-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[10px] font-semibold leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
           active
             ? "bg-primary text-white"
             : "bg-input-bg text-muted hover:bg-border/80 hover:text-foreground"
         } ${deleting ? "opacity-50" : ""}`}
       >
         {(item.concept || "?").slice(0, 1).toUpperCase()}
+        <span className="sr-only">{collapsedChip}</span>
       </button>
     );
   }
@@ -97,22 +113,28 @@ export function HistorySidebarItem({
       className={`group relative flex items-stretch gap-0.5 rounded-xl transition-colors ${
         active ? "bg-primary-soft" : "hover:bg-input-bg"
       } ${deleting ? "opacity-55" : ""}`}
+      title={fullTitle}
     >
       <button
         type="button"
         aria-current={active ? "true" : undefined}
+        aria-label={fullTitle}
         disabled={deleting}
         onClick={() => onSelect(item)}
         className="min-w-0 flex-1 cursor-pointer rounded-xl px-3 py-2.5 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
       >
         <p
-          className={`truncate text-sm font-medium ${
+          className={`truncate text-sm font-semibold ${
             active ? "text-primary" : "text-foreground"
           }`}
         >
-          {title}
+          {concept}
         </p>
-        <p className="mt-0.5 truncate text-[11px] text-muted-light">{time}</p>
+        {secondary ? (
+          <p className="mt-0.5 truncate text-[11px] leading-snug text-muted-light">
+            {secondary}
+          </p>
+        ) : null}
       </button>
 
       <div className="relative flex shrink-0 items-start pe-1 pt-1.5" ref={menuRef}>
