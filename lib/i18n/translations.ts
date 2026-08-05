@@ -134,7 +134,7 @@ const en = {
   historyPageOf: "Page {page} of {totalPages}",
   historyPageLabel: "Page {page}",
   historyClearAll: "Clear all history",
-  historyDelete: "Delete explanation",
+  historyDelete: "Delete",
   historyDeleteConfirmTitle: "Delete this explanation?",
   historyDeleteConfirmBody:
     "Are you sure you want to delete this explanation? This cannot be undone.",
@@ -302,7 +302,7 @@ const ar: { [K in TranslationKey]: string } = {
   historyPageOf: "صفحة {page} من {totalPages}",
   historyPageLabel: "صفحة {page}",
   historyClearAll: "مسح كل السجل",
-  historyDelete: "حذف الشرح",
+  historyDelete: "حذف",
   historyDeleteConfirmTitle: "حذف هذا الشرح؟",
   historyDeleteConfirmBody:
     "هل أنت متأكد من حذف هذا الشرح؟ لا يمكن التراجع عن ذلك.",
