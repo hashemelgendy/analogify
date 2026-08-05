@@ -96,26 +96,24 @@ export function InputCard({
         </div>
 
         <div className="flex w-full flex-col gap-2">
-          <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-            <Button
-              type="submit"
-              disabled={isLoading || !concept.trim()}
-              className="w-full sm:w-auto sm:min-w-[12rem]"
+          <Button
+            type="submit"
+            disabled={isLoading || !concept.trim()}
+            className="w-full min-h-[2.75rem]"
+          >
+            {isLoading ? t("creatingExplanation") : t("createExplanation")}
+          </Button>
+          {isLoading ? (
+            <p
+              className="text-sm text-muted"
+              role="status"
+              aria-live="polite"
             >
-              {isLoading ? t("creatingExplanation") : t("createExplanation")}
-            </Button>
-            {isLoading ? (
-              <p
-                className="text-sm text-muted"
-                role="status"
-                aria-live="polite"
-              >
-                {t("buildingAnalogy")}
-              </p>
-            ) : null}
-          </div>
+              {t("buildingAnalogy")}
+            </p>
+          ) : null}
 
-          <ContinueWithGoogleButton className="mt-1" disabled={isLoading} />
+          <ContinueWithGoogleButton disabled={isLoading} />
         </div>
       </form>
     </Card>

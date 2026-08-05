@@ -55,7 +55,7 @@ export function ContinueWithGoogleButton({
         }}
         disabled={isDisabled}
         aria-label={t("authContinueGoogle")}
-        className="inline-flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-xl border border-border bg-white px-5 py-3 text-sm font-medium text-neutral-900 shadow-sm transition-[background-color,box-shadow,border-color] hover:border-border hover:bg-neutral-50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex w-full min-h-[2.75rem] cursor-pointer items-center justify-center gap-2.5 rounded-xl border border-border bg-white px-5 py-3 text-sm font-medium text-neutral-900 shadow-sm transition-[background-color,box-shadow,border-color] hover:border-border hover:bg-neutral-50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <GoogleGIcon />
         <span>{label}</span>
