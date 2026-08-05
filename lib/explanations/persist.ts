@@ -44,6 +44,7 @@ export function toExplanationInsert(
     difficulty_level: explanation.difficultyLevel as DifficultyLevel,
     generation_mode: generationMode,
     model_used: modelUsed,
+    // Logged-in writes own under user_id only; guests keep guest_id isolation
     guest_id: userId ? null : (guestId ?? null),
     user_id: userId ?? null,
   };
@@ -151,9 +152,35 @@ export interface FetchExplanationsOptions {
 }
 
 /**
+ * Ownership filter:
+ * - Guest: guest_id matches (and typically user_id is null)
+ * - Signed-in: user_id matches OR still-unclaimed guest rows for this browser
+ *   (guest_id = cookie AND user_id IS NULL)
+ */
+function applyOwnershipFilter<
+  Q extends {
+    eq: (col: string, val: string) => Q;
+    or: (filters: string) => Q;
+  },
+>(query: Q, identity: AccessIdentity): Q {
+  const { userId, guestId } = identity;
+
+  if (userId && guestId) {
+    return query.or(
+      `user_id.eq.${userId},and(guest_id.eq.${guestId},user_id.is.null)`,
+    );
+  }
+  if (userId) {
+    return query.eq("user_id", userId);
+  }
+  if (guestId) {
+    return query.eq("guest_id", guestId);
+  }
+  return query;
+}
+
+/**
  * Recent explanations for a single owner identity, newest first.
- * Authenticated users: filter by user_id.
- * Guests: filter by guest_id.
  * Supports limit + offset; total is the full matching count for that owner.
  */
 export async function fetchRecentExplanationRows(
@@ -181,17 +208,14 @@ export async function fetchRecentExplanationRows(
 
   try {
     const supabase = createServiceRoleSupabaseClient();
-    let query = supabase
-      .from("explanations")
-      .select("*", { count: "exact" })
-      .order("created_at", { ascending: false })
-      .range(safeOffset, rangeEnd);
-
-    if (identity.userId) {
-      query = query.eq("user_id", identity.userId);
-    } else if (identity.guestId) {
-      query = query.eq("guest_id", identity.guestId);
-    }
+    const query = applyOwnershipFilter(
+      supabase
+        .from("explanations")
+        .select("*", { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(safeOffset, rangeEnd),
+      identity,
+    );
 
     const { data, error, count } = await query;
 
@@ -245,13 +269,10 @@ export async function fetchExplanationRowById(
 
   try {
     const supabase = createServiceRoleSupabaseClient();
-    let query = supabase.from("explanations").select("*").eq("id", id);
-
-    if (identity.userId) {
-      query = query.eq("user_id", identity.userId);
-    } else if (identity.guestId) {
-      query = query.eq("guest_id", identity.guestId);
-    }
+    const query = applyOwnershipFilter(
+      supabase.from("explanations").select("*").eq("id", id),
+      identity,
+    );
 
     const { data, error } = await query.maybeSingle();
 

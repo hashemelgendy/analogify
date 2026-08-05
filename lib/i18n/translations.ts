@@ -101,7 +101,7 @@ const en = {
   historyEyebrow: "Your learning trail",
   historyTitle: "Saved explanations",
   historySubtitle:
-    "Revisit analogies you've created — each one stays tied to this browser until you sign in later.",
+    "Revisit analogies you've created — guests keep them in this browser; signing in with Google saves them to your account.",
   historyLoadingEyebrow: "Loading",
   historyLoading: "Loading your saved explanations…",
   historyErrorEyebrow: "Something went wrong",
@@ -122,6 +122,18 @@ const en = {
   historyNext: "Next",
   historyPageOf: "Page {page} of {totalPages}",
   historyPageLabel: "Page {page}",
+
+  // Auth (Google only)
+  authContinueGoogle: "Continue with Google",
+  authSignOut: "Sign out",
+  authSigningIn: "Signing in…",
+  authLoading: "…",
+  authSignedIn: "Signed in",
+  authMergingHistory: "Saving your trail…",
+  authSignInFailed: "Sign-in failed. Please try again.",
+  authSignOutFailed: "Sign-out failed. Please try again.",
+  authSavePrompt:
+    "Sign in to save your explanations permanently across devices.",
 
   // Client error messages
   errNetwork:
@@ -225,7 +237,7 @@ const ar: { [K in TranslationKey]: string } = {
   historyEyebrow: "مسار تعلّمك",
   historyTitle: "الشروحات المحفوظة",
   historySubtitle:
-    "أعد زيارة التشبيهات التي أنشأتها — تبقى مرتبطة بهذا المتصفح حتى تسجّل الدخول لاحقًا.",
+    "أعد زيارة التشبيهات التي أنشأتها — للزوار تبقى في هذا المتصفح؛ وعند تسجيل الدخول عبر Google تُحفظ في حسابك.",
   historyLoadingEyebrow: "جارٍ التحميل",
   historyLoading: "جارٍ تحميل شروحاتك المحفوظة…",
   historyErrorEyebrow: "حدث خطأ",
@@ -245,6 +257,16 @@ const ar: { [K in TranslationKey]: string } = {
   historyNext: "التالي",
   historyPageOf: "صفحة {page} من {totalPages}",
   historyPageLabel: "صفحة {page}",
+
+  authContinueGoogle: "المتابعة مع Google",
+  authSignOut: "تسجيل الخروج",
+  authSigningIn: "جارٍ تسجيل الدخول…",
+  authLoading: "…",
+  authSignedIn: "مسجّل الدخول",
+  authMergingHistory: "جارٍ حفظ مسارك…",
+  authSignInFailed: "فشل تسجيل الدخول. حاول مرة أخرى.",
+  authSignOutFailed: "فشل تسجيل الخروج. حاول مرة أخرى.",
+  authSavePrompt: "سجّل الدخول لحفظ شروحاتك بشكل دائم عبر أجهزتك.",
 
   errNetwork: "تعذر الوصول إلى أنومنيت. تحقق من اتصالك وحاول مرة أخرى.",
   errRateLimit:

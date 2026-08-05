@@ -1,9 +1,7 @@
 /**
  * Server helpers for guest → authenticated user history migration.
- * Call after a successful sign-up/sign-in when a guest cookie is present.
- *
- * Example (future auth service):
- *   await claimGuestExplanations({ userId: session.user.id, guestId: await readGuestId() })
+ * Called from POST /api/auth/claim after Google sign-in when a guest cookie
+ * is present. Idempotent: only claims rows where user_id is still null.
  */
 
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";

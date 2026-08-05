@@ -110,7 +110,7 @@ function resolveModelUsed(): string {
 
 /**
  * Create an explanation for the given request body.
- * Attaches guest_id (or future user_id) so trail history stays isolated.
+ * Attaches guest_id (anonymous) or user_id (signed in) so trail history stays isolated.
  */
 export async function createExplanation(
   body: unknown,

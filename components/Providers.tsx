@@ -1,8 +1,13 @@
 "use client";
 
+import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { LanguageProvider } from "@/lib/i18n";
 import type { ReactNode } from "react";
 
 export function Providers({ children }: { children: ReactNode }) {
-  return <LanguageProvider>{children}</LanguageProvider>;
+  return (
+    <LanguageProvider>
+      <AuthProvider>{children}</AuthProvider>
+    </LanguageProvider>
+  );
 }

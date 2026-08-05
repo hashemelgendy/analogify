@@ -6,6 +6,7 @@ import {
   fetchExplanationById,
   fetchLearningTrailPage,
 } from "@/lib/api/explanations";
+import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLanguage } from "@/lib/i18n";
 import type { Explanation, LearningTrailItem } from "@/types/explanation";
 import { ExplanationCard } from "./ExplanationCard";
@@ -46,6 +47,7 @@ function formatPageLabel(
 
 export function HistoryPage() {
   const { language, t } = useLanguage();
+  const { effectiveUserId, isClaiming } = useAuth();
 
   const [currentPage, setCurrentPage] = useState(1);
   const [items, setItems] = useState<LearningTrailItem[]>([]);
@@ -96,10 +98,12 @@ export function HistoryPage() {
   );
 
   useEffect(() => {
-    // Client-only paged history load when the page changes.
+    // Wait for guest→user claim so history includes merged rows after login.
+    if (isClaiming) return;
+    // Client-only paged history load when page or identity changes.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- remote list hydration
     void loadHistoryPage(currentPage);
-  }, [currentPage, loadHistoryPage]);
+  }, [currentPage, loadHistoryPage, effectiveUserId, isClaiming]);
 
   async function loadExplanationDetail(id: string) {
     setLoadingEntryId(id);

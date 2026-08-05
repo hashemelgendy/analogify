@@ -1,11 +1,12 @@
 import Link from "next/link";
+import { AuthControls } from "./AuthControls";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { Logo } from "./Logo";
 
 interface HeaderProps {
-  /** Optional right-side content (shown next to the language switcher) */
+  /** Optional right-side content (shown next to auth + language; replaces tagline) */
   trailing?: React.ReactNode;
-  /** Show brand tagline when no custom trailing content */
+  /** Show brand tagline when no custom trailing content (desktop only) */
   showTagline?: boolean;
   tagline?: string;
 }
@@ -23,13 +24,14 @@ export function Header({
       >
         <Logo />
       </Link>
-      <div className="flex items-center gap-3 sm:gap-4">
+      <div className="flex items-center gap-2 sm:gap-3">
         {trailing ??
           (showTagline ? (
-            <p className="hidden text-end text-sm text-muted-light sm:block">
+            <p className="hidden text-end text-sm text-muted-light md:block">
               {tagline}
             </p>
           ) : null)}
+        <AuthControls />
         <LanguageSwitcher />
       </div>
     </header>

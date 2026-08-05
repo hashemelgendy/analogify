@@ -12,6 +12,11 @@ import {
   fetchLearningTrail,
 } from "@/lib/api/explanations";
 import { submitFeedbackRequest } from "@/lib/api/feedback";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import {
+  incrementGenerationCount,
+  readGenerationCount,
+} from "@/lib/guest/client-storage";
 import { useLanguage } from "@/lib/i18n";
 import type {
   Explanation,
@@ -30,12 +35,14 @@ import { Header } from "./Header";
 import { Hero } from "./Hero";
 import { InputCard } from "./InputCard";
 import { LearningTrail } from "./LearningTrail";
+import { SaveExplanationsPrompt } from "./SaveExplanationsPrompt";
 
-/** Newest explanations for the current guest (API default max handled server-side). */
+/** Newest explanations for the current guest/user (API default max handled server-side). */
 const TRAIL_LIMIT = 10;
 
 export function HomePage() {
   const { language, t } = useLanguage();
+  const { effectiveUserId, isClaiming } = useAuth();
   const [concept, setConcept] = useState(DEFAULT_FORM_VALUES.concept);
   const [familiarTopicsInput, setFamiliarTopicsInput] = useState(
     DEFAULT_FORM_VALUES.familiarTopics,
@@ -46,6 +53,7 @@ export function HomePage() {
   const [lastMode, setLastMode] = useState<ExplanationMode>("another");
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [isSavingFeedback, setIsSavingFeedback] = useState(false);
+  const [generationCount, setGenerationCount] = useState(0);
 
   // Learning Trail — real API data only (no mock)
   const [trailItems, setTrailItems] = useState<LearningTrailItem[]>([]);
@@ -84,11 +92,17 @@ export function HomePage() {
   }, [t]);
 
   useEffect(() => {
-    // Client-only trail load after mount / language-driven reload of messages.
-    // setState inside the async loader is intentional, not a derived-state effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate soft-prompt counter
+    setGenerationCount(readGenerationCount());
+  }, []);
+
+  useEffect(() => {
+    // Wait until guest→user claim finishes so the trail includes merged rows.
+    if (isClaiming) return;
+    // Client-only trail load after mount / login / language-driven reload.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- remote list hydration
     void loadTrail();
-  }, [loadTrail]);
+  }, [loadTrail, effectiveUserId, isClaiming]);
 
   // Smooth-scroll to the explanation after a learning-trail click paints the result.
   useEffect(() => {
@@ -136,7 +150,8 @@ export function HomePage() {
       });
       setExplanation(result);
       setError(null);
-      // Refresh guest trail after successful save path
+      setGenerationCount(incrementGenerationCount());
+      // Refresh trail after successful save path
       await loadTrail();
     } catch (err) {
       console.error("[HomePage] explain failed:", err);
@@ -237,6 +252,8 @@ export function HomePage() {
             }}
             isLoading={isLoading || isSelectingTrail}
           />
+
+          <SaveExplanationsPrompt generationCount={generationCount} />
 
           {showEmpty ? <ExplanationEmptyState /> : null}
 

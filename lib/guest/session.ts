@@ -1,84 +1,74 @@
-import { randomUUID } from "node:crypto";
-import { cookies } from "next/headers";
-
 /**
- * Persistent anonymous guest identity (server-only).
+ * Guest identity via httpOnly cookie (primary guest system).
+ * Optional localStorage mirror is handled client-side for merge flags / UX.
  *
- * - UUID v4, not derived from IP
- * - Stored in httpOnly cookie (readable only by the server)
- * - No Supabase Auth user is created
- *
- * Future auth attach:
- *   UPDATE explanations SET user_id = <auth uid> WHERE guest_id = <cookie> AND user_id IS NULL
+ * Server-only: do not import into client components.
  */
+
+import { cookies } from "next/headers";
+import { getAuthenticatedUserId } from "@/lib/supabase/server-auth";
 
 export const GUEST_COOKIE_NAME = "analogify_guest_id";
+const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 
-const GUEST_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 400; // ~13 months
+export type AccessIdentity = {
+  userId: string | null;
+  guestId: string | null;
+};
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-export function isGuestId(value: string | undefined | null): value is string {
-  return typeof value === "string" && UUID_RE.test(value.trim());
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }
 
-function cookieOptions() {
-  return {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax" as const,
-    path: "/",
-    maxAge: GUEST_COOKIE_MAX_AGE_SECONDS,
-  };
+/** Type guard / validator for guest ids (cookie or claim input). */
+export function isGuestId(value: string | null | undefined): value is string {
+  return typeof value === "string" && isUuid(value.trim());
 }
 
-/** Read guest id without creating one. */
+/** Read guest id from cookie without creating one. */
 export async function readGuestId(): Promise<string | null> {
-  const store = await cookies();
-  const raw = store.get(GUEST_COOKIE_NAME)?.value;
-  if (!isGuestId(raw)) return null;
-  return raw.trim();
+  const jar = await cookies();
+  const raw = jar.get(GUEST_COOKIE_NAME)?.value?.trim() ?? "";
+  if (!raw || !isUuid(raw)) return null;
+  return raw;
 }
 
 /**
- * Ensure a guest id exists for this browser session.
- * Safe to call from Route Handlers (sets cookie when missing/invalid).
+ * Returns the guest id cookie, creating one if missing.
+ * Call from API routes / server actions that mutate cookies.
  */
 export async function getOrCreateGuestId(): Promise<string> {
-  const store = await cookies();
-  const existing = store.get(GUEST_COOKIE_NAME)?.value;
-
-  if (isGuestId(existing)) {
-    // Refresh expiry so active guests stay sticky
-    store.set(GUEST_COOKIE_NAME, existing.trim(), cookieOptions());
-    return existing.trim();
+  const jar = await cookies();
+  const existing = jar.get(GUEST_COOKIE_NAME)?.value?.trim();
+  if (existing && isUuid(existing)) {
+    return existing;
   }
 
-  const guestId = randomUUID();
-  store.set(GUEST_COOKIE_NAME, guestId, cookieOptions());
+  const guestId = crypto.randomUUID();
+  jar.set(GUEST_COOKIE_NAME, guestId, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: ONE_YEAR_SECONDS,
+  });
   return guestId;
 }
 
 /**
- * Identity context used for isolation queries.
- * When auth is added, populate userId from the session and prefer it over guest.
- */
-export type AccessIdentity = {
-  guestId: string | null;
-  /** Future: auth.uid() */
-  userId: string | null;
-};
-
-/**
- * Resolve the current request identity (guest cookie today; auth later).
- * Creates a guest cookie when none exists so write/read stay consistent.
+ * Prefer signed-in user when present; otherwise guest cookie.
+ * When signed in, guestId is still returned if cookie exists (for claim merge).
  */
 export async function resolveAccessIdentity(): Promise<AccessIdentity> {
-  // TODO(auth): const userId = await getAuthenticatedUserId(); if (userId) return { userId, guestId: await readGuestId() };
+  const userId = await getAuthenticatedUserId();
+
+  if (userId) {
+    const guestId = await readGuestId();
+    return { userId, guestId };
+  }
+
   const guestId = await getOrCreateGuestId();
-  return {
-    guestId,
-    userId: null,
-  };
+  return { userId: null, guestId };
 }
