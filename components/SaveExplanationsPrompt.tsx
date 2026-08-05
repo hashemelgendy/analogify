@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLanguage } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import { ContinueWithGoogleButton } from "./ContinueWithGoogleButton";
 
 type SavePromptProps = {
   /** Generations completed this browser (local counter) */
@@ -14,11 +14,11 @@ const PROMPT_AFTER = 2;
 
 /**
  * Soft nudge after a few guest generations — never blocks the product.
+ * Reuses the same Google CTA pattern as under Create Explanation.
  */
 export function SaveExplanationsPrompt({ generationCount }: SavePromptProps) {
   const { t } = useLanguage();
-  const { user, isConfigured, isLoading, signInWithGoogle } = useAuth();
-  const [busy, setBusy] = useState(false);
+  const { user, isConfigured, isLoading } = useAuth();
 
   if (!isConfigured || isLoading || user) return null;
   if (generationCount < PROMPT_AFTER) return null;
@@ -26,20 +26,10 @@ export function SaveExplanationsPrompt({ generationCount }: SavePromptProps) {
   return (
     <div
       role="status"
-      className="rounded-xl border border-border/80 bg-surface/80 px-4 py-3 text-sm text-foreground"
+      className="rounded-xl border border-border/80 bg-surface/80 px-4 py-4"
     >
-      <p className="text-muted-light">{t("authSavePrompt")}</p>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => {
-          setBusy(true);
-          void signInWithGoogle().catch(() => setBusy(false));
-        }}
-        className="mt-2 cursor-pointer text-sm font-semibold text-primary underline-offset-2 hover:underline disabled:opacity-60"
-      >
-        {busy ? t("authSigningIn") : t("authContinueGoogle")}
-      </button>
+      <p className="mb-3 text-sm text-muted-light">{t("authSavePrompt")}</p>
+      <ContinueWithGoogleButton showHelper={false} />
     </div>
   );
 }

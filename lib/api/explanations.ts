@@ -1,7 +1,9 @@
 import {
   readApiDataOrThrow,
   readJsonOrThrow,
+  sameOriginDelete,
   sameOriginGet,
+  sameOriginJsonPost,
 } from "@/lib/api/http";
 import type {
   Explanation,
@@ -13,7 +15,8 @@ import type {
 /**
  * Client helpers for guest Learning Trail / explanation history.
  *
- * Frontend → /api/explanations → queries service → Supabase (guest_id filtered)
+ * Frontend → /api/explanations → queries service → Supabase (guest/user isolated)
+ * Soft-deleted rows stay in DB; lists exclude deleted_at IS NOT NULL.
  * Never imports service-role keys or queries Supabase from the browser.
  */
 
@@ -89,5 +92,45 @@ export async function fetchExplanationById(
   return readApiDataOrThrow<Explanation>(response, {
     invalidMessage: "Invalid response from explanation API",
     failureFallback: "We couldn’t load that explanation right now.",
+  });
+}
+
+/** Soft-delete one owned explanation (guest or signed-in). Idempotent if already deleted. */
+export async function deleteExplanationById(
+  id: string,
+): Promise<{ deleted: number }> {
+  const response = await fetch(
+    `/api/explanations/${encodeURIComponent(id)}`,
+    sameOriginDelete,
+  );
+
+  return readApiDataOrThrow<{ deleted: number }>(response, {
+    invalidMessage: "Invalid response from explanation API",
+    failureFallback: "We couldn’t delete that explanation right now.",
+  });
+}
+
+/** Soft-delete all owned active explanations for the current identity. */
+export async function deleteAllExplanations(): Promise<{ deleted: number }> {
+  const response = await fetch("/api/explanations", sameOriginDelete);
+
+  return readApiDataOrThrow<{ deleted: number }>(response, {
+    invalidMessage: "Invalid response from explanations API",
+    failureFallback: "We couldn’t clear your history right now.",
+  });
+}
+
+/** Restore a soft-deleted explanation (undo). */
+export async function restoreExplanationById(
+  id: string,
+): Promise<{ restored: number }> {
+  const response = await fetch(
+    `/api/explanations/${encodeURIComponent(id)}/restore`,
+    sameOriginJsonPost({}),
+  );
+
+  return readApiDataOrThrow<{ restored: number }>(response, {
+    invalidMessage: "Invalid response from explanation API",
+    failureFallback: "We couldn’t restore that explanation right now.",
   });
 }

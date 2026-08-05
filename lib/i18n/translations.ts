@@ -86,15 +86,26 @@ const en = {
   feedbackSaveFailed:
     "We couldn't save your feedback right now. Please try again.",
 
-  // Learning trail (home)
+  // Learning trail (home) — legacy keys still used by sidebar / loading states
   trailEyebrow: "Your learning trail",
   trailHeading: 'Keep your best "aha!" moments close.',
-  trailLoading: "Loading your learning trail…",
+  trailLoading: "Loading your history…",
   trailEmpty: "Your saved explanations will show up here after you create one.",
   trailTryAgain: "Try again",
   trailViewAll: "View saved explanations →",
-  trailLoadFailed: "We couldn't load your learning trail right now.",
+  trailLoadFailed: "We couldn't load your history right now.",
   trailOpenFailed: "We couldn't load that explanation right now.",
+
+  // History sidebar
+  sidebarEyebrow: "History",
+  sidebarTitle: "Explanations",
+  sidebarCollapse: "Collapse sidebar",
+  sidebarExpand: "Expand sidebar",
+  sidebarClose: "Close history",
+  sidebarOpenMenu: "Open history",
+  sidebarItemMenu: "Explanation options",
+  sidebarLoadingMore: "Loading more…",
+  sidebarEnd: "You're all caught up",
 
   // History page
   historyNewExplanation: "← New explanation",
@@ -122,6 +133,26 @@ const en = {
   historyNext: "Next",
   historyPageOf: "Page {page} of {totalPages}",
   historyPageLabel: "Page {page}",
+  historyClearAll: "Clear all history",
+  historyDelete: "Delete explanation",
+  historyDeleteConfirmTitle: "Delete this explanation?",
+  historyDeleteConfirmBody:
+    "Are you sure you want to delete this explanation? This cannot be undone.",
+  historyClearConfirmTitle: "Clear all history?",
+  historyClearConfirmBody:
+    "This will delete all your explanations. This cannot be undone.",
+  historyDeleteConfirm: "Delete",
+  historyClearConfirm: "Delete all",
+  historyCancel: "Cancel",
+  historyDeleted: "Explanation deleted",
+  historyUndo: "Undo",
+  historyRestored: "Explanation restored",
+  historyRestoreFailed:
+    "We couldn't restore that explanation. Please try again.",
+  historyCleared: "History cleared",
+  historyDeleteFailed: "We couldn't delete that explanation. Please try again.",
+  historyClearFailed: "We couldn't clear your history. Please try again.",
+  historyNoExplanations: "No explanations yet",
 
   // Auth (Google only)
   authContinueGoogle: "Continue with Google",
@@ -132,6 +163,7 @@ const en = {
   authMergingHistory: "Saving your trail…",
   authSignInFailed: "Sign-in failed. Please try again.",
   authSignOutFailed: "Sign-out failed. Please try again.",
+  authSaveHelper: "Sign in to save your explanations",
   authSavePrompt:
     "Sign in to save your explanations permanently across devices.",
 
@@ -226,12 +258,22 @@ const ar: { [K in TranslationKey]: string } = {
 
   trailEyebrow: "مسار تعلّمك",
   trailHeading: "أبقِ لحظات «آها!» قريبة منك.",
-  trailLoading: "جارٍ تحميل مسار التعلّم…",
+  trailLoading: "جارٍ تحميل سجلك…",
   trailEmpty: "ستظهر شروحاتك المحفوظة هنا بعد إنشائها.",
   trailTryAgain: "أعد المحاولة",
   trailViewAll: "عرض الشروحات المحفوظة ←",
-  trailLoadFailed: "تعذر تحميل مسار التعلّم الآن.",
+  trailLoadFailed: "تعذر تحميل سجلك الآن.",
   trailOpenFailed: "تعذر تحميل هذا الشرح الآن.",
+
+  sidebarEyebrow: "السجل",
+  sidebarTitle: "الشروحات",
+  sidebarCollapse: "طي الشريط الجانبي",
+  sidebarExpand: "توسيع الشريط الجانبي",
+  sidebarClose: "إغلاق السجل",
+  sidebarOpenMenu: "فتح السجل",
+  sidebarItemMenu: "خيارات الشرح",
+  sidebarLoadingMore: "جارٍ تحميل المزيد…",
+  sidebarEnd: "وصلت للنهاية",
 
   historyNewExplanation: "شرح جديد →",
   historyEyebrow: "مسار تعلّمك",
@@ -257,6 +299,24 @@ const ar: { [K in TranslationKey]: string } = {
   historyNext: "التالي",
   historyPageOf: "صفحة {page} من {totalPages}",
   historyPageLabel: "صفحة {page}",
+  historyClearAll: "مسح كل السجل",
+  historyDelete: "حذف الشرح",
+  historyDeleteConfirmTitle: "حذف هذا الشرح؟",
+  historyDeleteConfirmBody:
+    "هل أنت متأكد من حذف هذا الشرح؟ لا يمكن التراجع عن ذلك.",
+  historyClearConfirmTitle: "مسح كل السجل؟",
+  historyClearConfirmBody: "سيحذف هذا كل شروحاتك. لا يمكن التراجع عن ذلك.",
+  historyDeleteConfirm: "حذف",
+  historyClearConfirm: "حذف الكل",
+  historyCancel: "إلغاء",
+  historyDeleted: "تم حذف الشرح",
+  historyUndo: "تراجع",
+  historyRestored: "تم استعادة الشرح",
+  historyRestoreFailed: "تعذر استعادة هذا الشرح. حاول مرة أخرى.",
+  historyCleared: "تم مسح السجل",
+  historyDeleteFailed: "تعذر حذف هذا الشرح. حاول مرة أخرى.",
+  historyClearFailed: "تعذر مسح سجلك. حاول مرة أخرى.",
+  historyNoExplanations: "لا توجد شروحات بعد",
 
   authContinueGoogle: "المتابعة مع Google",
   authSignOut: "تسجيل الخروج",
@@ -266,6 +326,7 @@ const ar: { [K in TranslationKey]: string } = {
   authMergingHistory: "جارٍ حفظ مسارك…",
   authSignInFailed: "فشل تسجيل الدخول. حاول مرة أخرى.",
   authSignOutFailed: "فشل تسجيل الخروج. حاول مرة أخرى.",
+  authSaveHelper: "سجّل الدخول لحفظ شروحاتك",
   authSavePrompt: "سجّل الدخول لحفظ شروحاتك بشكل دائم عبر أجهزتك.",
 
   errNetwork: "تعذر الوصول إلى أنومنيت. تحقق من اتصالك وحاول مرة أخرى.",

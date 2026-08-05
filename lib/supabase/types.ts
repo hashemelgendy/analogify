@@ -30,6 +30,8 @@ export type Database = {
           analogy_title: string
           concept: string
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
           difficulty_level: Database["public"]["Enums"]["difficulty_level"]
           explanation: string
           familiar_topics: string[]
@@ -48,6 +50,8 @@ export type Database = {
           analogy_title: string
           concept: string
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           difficulty_level: Database["public"]["Enums"]["difficulty_level"]
           explanation: string
           familiar_topics?: string[]
@@ -66,6 +70,8 @@ export type Database = {
           analogy_title?: string
           concept?: string
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           difficulty_level?: Database["public"]["Enums"]["difficulty_level"]
           explanation?: string
           familiar_topics?: string[]

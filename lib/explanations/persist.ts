@@ -161,6 +161,7 @@ function applyOwnershipFilter<
   Q extends {
     eq: (col: string, val: string) => Q;
     or: (filters: string) => Q;
+    is: (col: string, val: null) => Q;
   },
 >(query: Q, identity: AccessIdentity): Q {
   const { userId, guestId } = identity;
@@ -179,9 +180,21 @@ function applyOwnershipFilter<
   return query;
 }
 
+/** Hide soft-deleted rows from all user-facing reads. */
+function applyActiveFilter<Q extends { is: (col: string, val: null) => Q }>(
+  query: Q,
+): Q {
+  return query.is("deleted_at", null);
+}
+
+function deletedByActor(identity: AccessIdentity): string {
+  return identity.userId?.trim() || "guest";
+}
+
 /**
  * Recent explanations for a single owner identity, newest first.
  * Supports limit + offset; total is the full matching count for that owner.
+ * Soft-deleted rows (deleted_at set) are excluded.
  */
 export async function fetchRecentExplanationRows(
   identity: AccessIdentity,
@@ -209,11 +222,13 @@ export async function fetchRecentExplanationRows(
   try {
     const supabase = createServiceRoleSupabaseClient();
     const query = applyOwnershipFilter(
-      supabase
-        .from("explanations")
-        .select("*", { count: "exact" })
-        .order("created_at", { ascending: false })
-        .range(safeOffset, rangeEnd),
+      applyActiveFilter(
+        supabase
+          .from("explanations")
+          .select("*", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .range(safeOffset, rangeEnd),
+      ),
       identity,
     );
 
@@ -249,7 +264,7 @@ export type FetchExplanationByIdResult =
   | { ok: false; error: string; notFound?: boolean };
 
 /**
- * Load one explanation only if it belongs to the given identity.
+ * Load one explanation only if it belongs to the given identity and is not soft-deleted.
  * Returns notFound for other visitors (no cross-guest leaks).
  */
 export async function fetchExplanationRowById(
@@ -270,7 +285,9 @@ export async function fetchExplanationRowById(
   try {
     const supabase = createServiceRoleSupabaseClient();
     const query = applyOwnershipFilter(
-      supabase.from("explanations").select("*").eq("id", id),
+      applyActiveFilter(
+        supabase.from("explanations").select("*").eq("id", id),
+      ),
       identity,
     );
 
@@ -300,3 +317,179 @@ export async function fetchExplanationRowById(
     };
   }
 }
+
+export type SoftDeleteExplanationsResult =
+  | { ok: true; deleted: number }
+  | { ok: false; error: string };
+
+/**
+ * Soft-delete one explanation if owned by identity (sets deleted_at).
+ * Idempotent: already soft-deleted / unowned → deleted: 0.
+ */
+export async function softDeleteExplanationRowById(
+  id: string,
+  identity: AccessIdentity,
+): Promise<SoftDeleteExplanationsResult> {
+  if (!isSupabaseServiceRoleConfigured()) {
+    return {
+      ok: false,
+      error: "Supabase service role is not configured",
+    };
+  }
+
+  if (!identity.userId && !identity.guestId) {
+    return { ok: true, deleted: 0 };
+  }
+
+  try {
+    const supabase = createServiceRoleSupabaseClient();
+    const now = new Date().toISOString();
+    const query = applyOwnershipFilter(
+      applyActiveFilter(
+        supabase
+          .from("explanations")
+          .update({
+            deleted_at: now,
+            deleted_by: deletedByActor(identity),
+          })
+          .eq("id", id),
+      ),
+      identity,
+    );
+
+    const { data, error } = await query.select("id");
+
+    if (error) {
+      console.error("[explanations.softDeleteById] Failed:", {
+        message: error.message,
+        code: error.code,
+      });
+      return { ok: false, error: error.message };
+    }
+
+    return { ok: true, deleted: data?.length ?? 0 };
+  } catch (error) {
+    console.error(
+      "[explanations.softDeleteById] Unexpected:",
+      error instanceof Error ? error.message : "unknown",
+    );
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown database error",
+    };
+  }
+}
+
+/**
+ * Soft-delete all active explanations owned by identity.
+ */
+export async function softDeleteOwnedExplanationRows(
+  identity: AccessIdentity,
+): Promise<SoftDeleteExplanationsResult> {
+  if (!isSupabaseServiceRoleConfigured()) {
+    return {
+      ok: false,
+      error: "Supabase service role is not configured",
+    };
+  }
+
+  if (!identity.userId && !identity.guestId) {
+    return { ok: true, deleted: 0 };
+  }
+
+  try {
+    const supabase = createServiceRoleSupabaseClient();
+    const now = new Date().toISOString();
+    const query = applyOwnershipFilter(
+      applyActiveFilter(
+        supabase.from("explanations").update({
+          deleted_at: now,
+          deleted_by: deletedByActor(identity),
+        }),
+      ),
+      identity,
+    );
+
+    const { data, error } = await query.select("id");
+
+    if (error) {
+      console.error("[explanations.softDeleteOwned] Failed:", {
+        message: error.message,
+        code: error.code,
+      });
+      return { ok: false, error: error.message };
+    }
+
+    return { ok: true, deleted: data?.length ?? 0 };
+  } catch (error) {
+    console.error(
+      "[explanations.softDeleteOwned] Unexpected:",
+      error instanceof Error ? error.message : "unknown",
+    );
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown database error",
+    };
+  }
+}
+
+/**
+ * Restore a soft-deleted explanation (clears deleted_at / deleted_by).
+ * Scoped by ownership. Already-active rows → restored: 0.
+ */
+export async function restoreExplanationRowById(
+  id: string,
+  identity: AccessIdentity,
+): Promise<SoftDeleteExplanationsResult> {
+  if (!isSupabaseServiceRoleConfigured()) {
+    return {
+      ok: false,
+      error: "Supabase service role is not configured",
+    };
+  }
+
+  if (!identity.userId && !identity.guestId) {
+    return { ok: true, deleted: 0 };
+  }
+
+  try {
+    const supabase = createServiceRoleSupabaseClient();
+    // Only restore rows that are currently soft-deleted
+    const base = supabase
+      .from("explanations")
+      .update({
+        deleted_at: null,
+        deleted_by: null,
+      })
+      .eq("id", id)
+      .not("deleted_at", "is", null);
+
+    const query = applyOwnershipFilter(base, identity);
+    const { data, error } = await query.select("id");
+
+    if (error) {
+      console.error("[explanations.restoreById] Failed:", {
+        message: error.message,
+        code: error.code,
+      });
+      return { ok: false, error: error.message };
+    }
+
+    return { ok: true, deleted: data?.length ?? 0 };
+  } catch (error) {
+    console.error(
+      "[explanations.restoreById] Unexpected:",
+      error instanceof Error ? error.message : "unknown",
+    );
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown database error",
+    };
+  }
+}
+
+/** @deprecated Prefer softDeleteExplanationRowById */
+export const deleteExplanationRowById = softDeleteExplanationRowById;
+
+/** @deprecated Prefer softDeleteOwnedExplanationRows */
+export const deleteOwnedExplanationRows = softDeleteOwnedExplanationRows;

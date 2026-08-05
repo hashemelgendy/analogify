@@ -1,6 +1,7 @@
 "use client";
 
 import { useLanguage, type SuggestedTopicId } from "@/lib/i18n";
+import { ContinueWithGoogleButton } from "./ContinueWithGoogleButton";
 import { Button, Card, Input } from "./ui";
 
 interface InputCardProps {
@@ -94,19 +95,27 @@ export function InputCard({
           </p>
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-          <Button type="submit" disabled={isLoading || !concept.trim()}>
-            {isLoading ? t("creatingExplanation") : t("createExplanation")}
-          </Button>
-          {isLoading ? (
-            <p
-              className="text-sm text-muted"
-              role="status"
-              aria-live="polite"
+        <div className="flex w-full flex-col gap-2">
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+            <Button
+              type="submit"
+              disabled={isLoading || !concept.trim()}
+              className="w-full sm:w-auto sm:min-w-[12rem]"
             >
-              {t("buildingAnalogy")}
-            </p>
-          ) : null}
+              {isLoading ? t("creatingExplanation") : t("createExplanation")}
+            </Button>
+            {isLoading ? (
+              <p
+                className="text-sm text-muted"
+                role="status"
+                aria-live="polite"
+              >
+                {t("buildingAnalogy")}
+              </p>
+            ) : null}
+          </div>
+
+          <ContinueWithGoogleButton className="mt-1" disabled={isLoading} />
         </div>
       </form>
     </Card>

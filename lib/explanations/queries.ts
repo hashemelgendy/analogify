@@ -2,6 +2,9 @@ import {
   explanationFromRow,
   fetchExplanationRowById,
   fetchRecentExplanationRows,
+  restoreExplanationRowById,
+  softDeleteExplanationRowById,
+  softDeleteOwnedExplanationRows,
   trailItemFromRow,
 } from "@/lib/explanations/persist";
 import { resolveAccessIdentity } from "@/lib/guest/session";
@@ -99,4 +102,70 @@ export async function getExplanationById(id: string): Promise<Explanation> {
   }
 
   return explanationFromRow(result.row);
+}
+
+/**
+ * Soft-delete one explanation owned by the current identity.
+ * Sets deleted_at; already soft-deleted rows succeed with deleted: 0.
+ */
+export async function deleteExplanationById(
+  id: string,
+): Promise<{ deleted: number }> {
+  if (!id.trim() || !UUID_RE.test(id.trim())) {
+    throw new ExplanationQueryError("Invalid explanation id", 400);
+  }
+
+  const identity = await resolveAccessIdentity();
+  const result = await softDeleteExplanationRowById(id.trim(), identity);
+
+  if (!result.ok) {
+    throw new ExplanationQueryError(
+      "We couldn’t delete that explanation right now.",
+      503,
+    );
+  }
+
+  return { deleted: result.deleted };
+}
+
+/**
+ * Soft-delete all active explanations owned by the current guest/user.
+ */
+export async function deleteAllOwnedExplanations(): Promise<{
+  deleted: number;
+}> {
+  const identity = await resolveAccessIdentity();
+  const result = await softDeleteOwnedExplanationRows(identity);
+
+  if (!result.ok) {
+    throw new ExplanationQueryError(
+      "We couldn’t clear your history right now.",
+      503,
+    );
+  }
+
+  return { deleted: result.deleted };
+}
+
+/**
+ * Restore a soft-deleted explanation for the current identity (undo).
+ */
+export async function restoreExplanationById(
+  id: string,
+): Promise<{ restored: number }> {
+  if (!id.trim() || !UUID_RE.test(id.trim())) {
+    throw new ExplanationQueryError("Invalid explanation id", 400);
+  }
+
+  const identity = await resolveAccessIdentity();
+  const result = await restoreExplanationRowById(id.trim(), identity);
+
+  if (!result.ok) {
+    throw new ExplanationQueryError(
+      "We couldn’t restore that explanation right now.",
+      503,
+    );
+  }
+
+  return { restored: result.deleted };
 }

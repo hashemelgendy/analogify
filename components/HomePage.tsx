@@ -1,22 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DEFAULT_FORM_VALUES } from "@/data/mock";
 import { toFriendlyExplainError } from "@/lib/client/explain-errors";
 import {
   parseFamiliarTopicsInput,
   requestExplanation,
 } from "@/lib/api/explain";
-import {
-  fetchExplanationById,
-  fetchLearningTrail,
-} from "@/lib/api/explanations";
+import { fetchExplanationById } from "@/lib/api/explanations";
 import { submitFeedbackRequest } from "@/lib/api/feedback";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import {
   incrementGenerationCount,
   readGenerationCount,
 } from "@/lib/guest/client-storage";
+import {
+  explanationToTrailItem,
+  useInfiniteHistory,
+} from "@/lib/history/useInfiniteHistory";
 import { useLanguage } from "@/lib/i18n";
 import type {
   Explanation,
@@ -24,6 +25,7 @@ import type {
   FeedbackPayload,
   LearningTrailItem,
 } from "@/types/explanation";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { ExplanationCard } from "./ExplanationCard";
 import {
   ExplanationEmptyState,
@@ -33,12 +35,9 @@ import {
 import { FeedbackCard } from "./FeedbackCard";
 import { Header } from "./Header";
 import { Hero } from "./Hero";
+import { HistorySidebar } from "./HistorySidebar";
 import { InputCard } from "./InputCard";
-import { LearningTrail } from "./LearningTrail";
 import { SaveExplanationsPrompt } from "./SaveExplanationsPrompt";
-
-/** Newest explanations for the current guest/user (API default max handled server-side). */
-const TRAIL_LIMIT = 10;
 
 export function HomePage() {
   const { language, t } = useLanguage();
@@ -55,10 +54,6 @@ export function HomePage() {
   const [isSavingFeedback, setIsSavingFeedback] = useState(false);
   const [generationCount, setGenerationCount] = useState(0);
 
-  // Learning Trail — real API data only (no mock)
-  const [trailItems, setTrailItems] = useState<LearningTrailItem[]>([]);
-  const [trailLoading, setTrailLoading] = useState(true);
-  const [trailError, setTrailError] = useState<string | null>(null);
   const [isSelectingTrail, setIsSelectingTrail] = useState(false);
   const [lastSelectedTrailId, setLastSelectedTrailId] = useState<string | null>(
     null,
@@ -67,29 +62,34 @@ export function HomePage() {
     null,
   );
 
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  const [pendingDelete, setPendingDelete] = useState<LearningTrailItem | null>(
+    null,
+  );
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [undoItem, setUndoItem] = useState<LearningTrailItem | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [undoBusy, setUndoBusy] = useState(false);
+
+  const {
+    items: historyItems,
+    loading: historyLoading,
+    loadingMore: historyLoadingMore,
+    hasMore: historyHasMore,
+    error: historyError,
+    resetAndLoad,
+    loadMore,
+    prependItem,
+    softDeleteItem,
+    restoreItem,
+  } = useInfiniteHistory();
+
   const inFlightRef = useRef(false);
-  /** Result panel target when opening a learning-trail entry from the landing page. */
   const explanationRef = useRef<HTMLDivElement>(null);
-  /** Scroll only after trail open completes and the result container is painted. */
   const shouldScrollToExplanationRef = useRef(false);
-
-  const loadTrail = useCallback(async () => {
-    setTrailLoading(true);
-    setTrailError(null);
-
-    try {
-      const items = await fetchLearningTrail(TRAIL_LIMIT);
-      setTrailItems(items);
-    } catch (err) {
-      console.error("[HomePage] learning trail failed:", err);
-      setTrailError(
-        err instanceof Error ? err.message : t("trailLoadFailed"),
-      );
-      setTrailItems([]);
-    } finally {
-      setTrailLoading(false);
-    }
-  }, [t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate soft-prompt counter
@@ -97,19 +97,14 @@ export function HomePage() {
   }, []);
 
   useEffect(() => {
-    // Wait until guest→user claim finishes so the trail includes merged rows.
     if (isClaiming) return;
-    // Client-only trail load after mount / login / language-driven reload.
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- remote list hydration
-    void loadTrail();
-  }, [loadTrail, effectiveUserId, isClaiming]);
+    void resetAndLoad();
+  }, [effectiveUserId, isClaiming, resetAndLoad]);
 
-  // Smooth-scroll to the explanation after a learning-trail click paints the result.
   useEffect(() => {
     if (!shouldScrollToExplanationRef.current) return;
     if (isSelectingTrail) return;
     if (!explanation) {
-      // Trail open failed and nothing to show — drop the pending scroll.
       if (errorSource === "select") {
         shouldScrollToExplanationRef.current = false;
       }
@@ -122,6 +117,20 @@ export function HomePage() {
       block: "start",
     });
   }, [explanation, isSelectingTrail, errorSource]);
+
+  useEffect(() => {
+    if (!undoItem && toast) {
+      const timer = window.setTimeout(() => setToast(null), 2800);
+      return () => window.clearTimeout(timer);
+    }
+    if (undoItem) {
+      const timer = window.setTimeout(() => {
+        setUndoItem(null);
+        setToast(null);
+      }, 5000);
+      return () => window.clearTimeout(timer);
+    }
+  }, [toast, undoItem]);
 
   async function createExplanation(mode: ExplanationMode = "another") {
     if (inFlightRef.current || isLoading || isSelectingTrail) return;
@@ -150,9 +159,16 @@ export function HomePage() {
       });
       setExplanation(result);
       setError(null);
+      setLastSelectedTrailId(result.id ?? null);
       setGenerationCount(incrementGenerationCount());
-      // Refresh trail after successful save path
-      await loadTrail();
+
+      const trailItem = explanationToTrailItem(result);
+      if (trailItem) {
+        prependItem(trailItem);
+      } else {
+        // Persist may have failed to return id — refresh list
+        void resetAndLoad();
+      }
     } catch (err) {
       console.error("[HomePage] explain failed:", err);
       setError(toFriendlyExplainError(err, language));
@@ -174,14 +190,11 @@ export function HomePage() {
     setLastSelectedTrailId(item.id);
 
     try {
-      // DB load only — never regenerates via OpenAI
       const full = await fetchExplanationById(item.id);
       setExplanation(full);
     } catch (err) {
-      console.error("[HomePage] trail select failed:", err);
-      setError(
-        err instanceof Error ? err.message : t("trailOpenFailed"),
-      );
+      console.error("[HomePage] history select failed:", err);
+      setError(err instanceof Error ? err.message : t("trailOpenFailed"));
       setErrorSource("select");
     } finally {
       setIsSelectingTrail(false);
@@ -229,102 +242,239 @@ export function HomePage() {
     }
   }
 
+  async function confirmDelete() {
+    if (!pendingDelete || deleteBusy) return;
+    const item = pendingDelete;
+    setDeleteBusy(true);
+    setDeletingId(item.id);
+
+    try {
+      await softDeleteItem(item.id);
+      if (explanation?.id === item.id) {
+        setExplanation(null);
+        setLastSelectedTrailId(null);
+      }
+      setPendingDelete(null);
+      setUndoItem(item);
+      setToast(t("historyDeleted"));
+    } catch (err) {
+      console.error("[HomePage] soft delete failed:", err);
+      void resetAndLoad();
+      setToast(null);
+      setError(
+        err instanceof Error ? err.message : t("historyDeleteFailed"),
+      );
+    } finally {
+      setDeleteBusy(false);
+      setDeletingId(null);
+    }
+  }
+
+  async function handleUndo() {
+    if (!undoItem || undoBusy) return;
+    const item = undoItem;
+    setUndoBusy(true);
+    try {
+      await restoreItem(item);
+      setUndoItem(null);
+      setToast(t("historyRestored"));
+    } catch (err) {
+      console.error("[HomePage] restore failed:", err);
+      setError(
+        err instanceof Error ? err.message : t("historyRestoreFailed"),
+      );
+    } finally {
+      setUndoBusy(false);
+    }
+  }
+
   const showEmpty = !explanation && !isLoading && !isSelectingTrail && !error;
   const showLoading = isLoading || isSelectingTrail;
   const showError = Boolean(error) && !isLoading && !isSelectingTrail;
   const showResult = Boolean(explanation) && !isLoading && !isSelectingTrail;
 
+  const activeId = explanation?.id ?? lastSelectedTrailId;
+
   return (
-    <div className="min-h-full cursor-default bg-background">
-      <div className="mx-auto w-full max-w-2xl px-4 pb-16 pt-6 sm:px-6 sm:pt-8">
-        <Header tagline={t("tagline")} />
+    <div className="fixed inset-0 flex overflow-hidden bg-background">
+      <HistorySidebar
+        items={historyItems}
+        activeId={activeId}
+        loading={historyLoading}
+        loadingMore={historyLoadingMore}
+        hasMore={historyHasMore}
+        error={
+          historyError ===
+          "We couldn’t load your learning trail right now."
+            ? t("trailLoadFailed")
+            : historyError
+        }
+        collapsed={sidebarCollapsed}
+        mobileOpen={mobileSidebarOpen}
+        deletingId={deletingId}
+        onCloseMobile={() => setMobileSidebarOpen(false)}
+        onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
+        onSelect={(item) => {
+          void handleSelectTrailItem(item);
+        }}
+        onDelete={(item) => setPendingDelete(item)}
+        onLoadMore={() => {
+          void loadMore();
+        }}
+        onRetry={() => {
+          void resetAndLoad();
+        }}
+      />
 
-        <main className="mt-12 flex flex-col gap-8 sm:mt-16 sm:gap-10">
-          <Hero />
-
-          <InputCard
-            concept={concept}
-            familiarTopics={familiarTopicsInput}
-            onConceptChange={setConcept}
-            onFamiliarTopicsChange={setFamiliarTopicsInput}
-            onSubmit={() => {
-              void createExplanation("another");
-            }}
-            isLoading={isLoading || isSelectingTrail}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="shrink-0 border-b border-border/80 bg-background/90 px-4 py-3 backdrop-blur-sm sm:px-6 sm:py-4">
+          <Header
+            tagline={t("tagline")}
+            leading={
+              <button
+                type="button"
+                className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-foreground hover:bg-input-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:hidden"
+                aria-label={t("sidebarOpenMenu")}
+                onClick={() => setMobileSidebarOpen(true)}
+              >
+                <BurgerIcon />
+              </button>
+            }
           />
+        </div>
 
-          <SaveExplanationsPrompt generationCount={generationCount} />
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div className="mx-auto w-full max-w-2xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
+            {(toast || undoItem) && (
+              <div
+                className="mb-6 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-2 text-sm text-foreground shadow-sm"
+                role="status"
+                aria-live="polite"
+              >
+                <span>{toast ?? t("historyDeleted")}</span>
+                {undoItem ? (
+                  <button
+                    type="button"
+                    disabled={undoBusy}
+                    onClick={() => {
+                      void handleUndo();
+                    }}
+                    className="cursor-pointer font-semibold text-primary underline-offset-2 hover:underline disabled:opacity-50"
+                  >
+                    {undoBusy ? "…" : t("historyUndo")}
+                  </button>
+                ) : null}
+              </div>
+            )}
 
-          {showEmpty ? <ExplanationEmptyState /> : null}
+            <div className="flex flex-col gap-8 sm:gap-10">
+              <Hero />
 
-          {showLoading ? (
-            <ExplanationLoadingState
-              message={
-                isSelectingTrail
-                  ? t("loadingOpening")
-                  : t("loadingCrafting")
-              }
-              detail={
-                isSelectingTrail
-                  ? t("loadingOpeningDetail")
-                  : t("loadingCraftingDetail")
-              }
-            />
-          ) : null}
-
-          {showError && error ? (
-            <ExplanationErrorState
-              message={error}
-              onRetry={handleRetry}
-              isRetrying={isLoading || isSelectingTrail}
-            />
-          ) : null}
-
-          {showResult && explanation ? (
-            <div
-              ref={explanationRef}
-              id="explanation-result"
-              className="flex flex-col gap-8"
-            >
-              <ExplanationCard
-                data={explanation}
-                isLoading={isLoading}
-                onModeChange={(mode) => {
-                  void createExplanation(mode);
+              <InputCard
+                concept={concept}
+                familiarTopics={familiarTopicsInput}
+                onConceptChange={setConcept}
+                onFamiliarTopicsChange={setFamiliarTopicsInput}
+                onSubmit={() => {
+                  void createExplanation("another");
                 }}
+                isLoading={isLoading || isSelectingTrail}
               />
-              <FeedbackCard
-                key={
-                  explanation.id ??
-                  explanation.concept + explanation.analogyTitle
-                }
-                concept={explanation.concept}
-                explanationId={explanation.id}
-                disabled={isSavingFeedback || isLoading || isSelectingTrail}
-                onSubmit={handleFeedback}
-              />
-              {feedbackError ? (
-                <p className="text-sm text-muted" role="alert">
-                  {feedbackError}
-                </p>
+
+              <SaveExplanationsPrompt generationCount={generationCount} />
+
+              {showEmpty ? <ExplanationEmptyState /> : null}
+
+              {showLoading ? (
+                <ExplanationLoadingState
+                  message={
+                    isSelectingTrail
+                      ? t("loadingOpening")
+                      : t("loadingCrafting")
+                  }
+                  detail={
+                    isSelectingTrail
+                      ? t("loadingOpeningDetail")
+                      : t("loadingCraftingDetail")
+                  }
+                />
+              ) : null}
+
+              {showError && error ? (
+                <ExplanationErrorState
+                  message={error}
+                  onRetry={handleRetry}
+                  isRetrying={isLoading || isSelectingTrail}
+                />
+              ) : null}
+
+              {showResult && explanation ? (
+                <div
+                  ref={explanationRef}
+                  id="explanation-result"
+                  className="flex flex-col gap-8"
+                >
+                  <ExplanationCard
+                    data={explanation}
+                    isLoading={isLoading}
+                    onModeChange={(mode) => {
+                      void createExplanation(mode);
+                    }}
+                  />
+                  <FeedbackCard
+                    key={
+                      explanation.id ??
+                      explanation.concept + explanation.analogyTitle
+                    }
+                    concept={explanation.concept}
+                    explanationId={explanation.id}
+                    disabled={
+                      isSavingFeedback || isLoading || isSelectingTrail
+                    }
+                    onSubmit={handleFeedback}
+                  />
+                  {feedbackError ? (
+                    <p className="text-sm text-muted" role="alert">
+                      {feedbackError}
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
             </div>
-          ) : null}
-
-          <LearningTrail
-            items={trailItems}
-            isLoading={trailLoading}
-            error={trailError}
-            activeId={explanation?.id ?? null}
-            onSelect={(item) => {
-              void handleSelectTrailItem(item);
-            }}
-            onRetry={() => {
-              void loadTrail();
-            }}
-          />
+          </div>
         </main>
       </div>
+
+      <ConfirmDialog
+        open={pendingDelete != null}
+        title={t("historyDeleteConfirmTitle")}
+        description={t("historyDeleteConfirmBody")}
+        confirmLabel={t("historyDeleteConfirm")}
+        cancelLabel={t("historyCancel")}
+        danger
+        busy={deleteBusy}
+        onCancel={() => {
+          if (!deleteBusy) setPendingDelete(null);
+        }}
+        onConfirm={() => {
+          void confirmDelete();
+        }}
+      />
     </div>
+  );
+}
+
+function BurgerIcon() {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      aria-hidden
+    >
+      <path strokeLinecap="round" d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13" />
+    </svg>
   );
 }

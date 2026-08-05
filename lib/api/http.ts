@@ -24,6 +24,13 @@ export function sameOriginJsonPost(body: unknown): RequestInit {
   };
 }
 
+export const sameOriginDelete: RequestInit = {
+  method: "DELETE",
+  headers: { Accept: "application/json" },
+  cache: "no-store",
+  credentials: "same-origin",
+};
+
 export async function readJsonOrThrow<T>(
   response: Response,
   invalidMessage: string,

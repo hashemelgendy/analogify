@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import {
   ExplanationQueryError,
+  deleteAllOwnedExplanations,
   getLearningTrailItems,
 } from "@/lib/explanations/queries";
-import type { LearningTrailPageApiResponse } from "@/types/explanation";
+import type {
+  ApiResponse,
+  LearningTrailPageApiResponse,
+} from "@/types/explanation";
 
 /**
  * GET /api/explanations?limit=10
@@ -13,8 +17,14 @@ import type { LearningTrailPageApiResponse } from "@/types/explanation";
  * Returns recent explanations for the learning trail / history (newest first).
  * `data` remains LearningTrailItem[] so existing clients keep working.
  * Optional `pagination` meta is always included for page-aware UIs.
+ *
+ * DELETE /api/explanations
+ * Soft-deletes all active explanations owned by the current guest/user.
  */
-function jsonResponse(body: LearningTrailPageApiResponse, status: number) {
+function jsonResponse(
+  body: LearningTrailPageApiResponse | ApiResponse<{ deleted: number }>,
+  status: number,
+) {
   return NextResponse.json(body, { status });
 }
 
@@ -71,6 +81,29 @@ export async function GET(request: Request) {
       {
         success: false,
         error: "We couldn’t load your learning trail right now.",
+      },
+      500,
+    );
+  }
+}
+
+export async function DELETE() {
+  try {
+    const data = await deleteAllOwnedExplanations();
+    return jsonResponse({ success: true, data }, 200);
+  } catch (error) {
+    if (error instanceof ExplanationQueryError) {
+      return jsonResponse(
+        { success: false, error: error.message },
+        error.status,
+      );
+    }
+
+    console.error("[api/explanations DELETE]", error);
+    return jsonResponse(
+      {
+        success: false,
+        error: "We couldn’t clear your history right now.",
       },
       500,
     );
